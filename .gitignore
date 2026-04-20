@@ -1,0 +1,52 @@
+/build/
+/build-*/
+/cmake-build-*/
+/debug/
+/release/
+/out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Qt / QML generated files
+*.user
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qmlc
+*.jsc
+*.rcc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*_autogen/
+.qmltc/
+.qtc_clangd/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Android / Qt local packaging
+*.apk
+*.aab
+local.properties
+
+# Local-only config and data
+.env
+.env.*
+config.local.json
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
