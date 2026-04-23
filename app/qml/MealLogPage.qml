@@ -6,6 +6,23 @@ ScrollView {
     id: root
     clip: true
     property int selectedInsightIndex: -1
+    property var mealTypeOptions: [
+        { label: "早餐", value: "breakfast" },
+        { label: "午餐", value: "lunch" },
+        { label: "晚餐", value: "dinner" },
+        { label: "加餐", value: "snack" }
+    ]
+    property var locationTypeOptions: [
+        { label: "校内", value: "campus" },
+        { label: "宿舍", value: "dorm" },
+        { label: "通勤路上", value: "commute" },
+        { label: "校外", value: "off_campus" }
+    ]
+    property var diningModeOptions: [
+        { label: "堂食", value: "dine_in" },
+        { label: "打包", value: "takeaway" },
+        { label: "外卖", value: "delivery" }
+    ]
 
     function weekdayValueForDate(date) {
         const day = date.getDay()
@@ -35,8 +52,20 @@ ScrollView {
     }
 
     function comboIndexByValue(box, value) {
-        const index = box.find(value)
-        return index >= 0 ? index : 0
+        for (let i = 0; i < box.count; ++i) {
+            const item = box.model[i]
+            if (item && item.value !== undefined) {
+                if (item.value === value) {
+                    return i
+                }
+                continue
+            }
+
+            if (item === value) {
+                return i
+            }
+        }
+        return box.count > 0 ? 0 : -1
     }
 
     function applyDefaults() {
@@ -54,7 +83,7 @@ ScrollView {
         classAfterMealCheck.checked = false
         moodField.text = ""
         mealNotesField.text = ""
-        portionRatioField.text = "1.0"
+        portionRatioField.text = ""
         selectedDishNoteField.text = ""
         mealLogManager.setDishSearch("")
         dishSearchField.text = ""
@@ -109,6 +138,77 @@ ScrollView {
     function focusDishSearch(dishName) {
         dishSearchField.text = dishName
         mealLogManager.setDishSearch(dishName)
+        dishPicker.currentIndex = 0
+    }
+
+    function optionLabel(options, value) {
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === value) {
+                return options[i].label
+            }
+        }
+        return value
+    }
+
+    function copyMealDishesFromTemplate(meal) {
+        if (!meal || !meal.dishItems) {
+            return
+        }
+
+        mealLogManager.clearSelection()
+        let carriedDiningMode = ""
+        for (let i = 0; i < meal.dishItems.length; ++i) {
+            const dishItem = meal.dishItems[i]
+            mealLogManager.addSelectedDish(
+                dishItem.id,
+                Number(dishItem.portionRatio || "0"),
+                dishItem.customNotes || ""
+            )
+            if (!carriedDiningMode && dishItem.defaultDiningMode) {
+                carriedDiningMode = dishItem.defaultDiningMode
+            }
+        }
+
+        if (!carriedDiningMode && meal.diningMode) {
+            carriedDiningMode = meal.diningMode
+        }
+
+        if (carriedDiningMode) {
+            diningModeBox.currentIndex = comboIndexByValue(diningModeBox, carriedDiningMode)
+        }
+    }
+
+    function applyMealTemplate(meal, dishesOnly) {
+        if (!meal) {
+            return
+        }
+
+        mealLogManager.cancelEditingMealLog()
+        copyMealDishesFromTemplate(meal)
+        mealLogManager.setDishSearch("")
+        dishSearchField.text = ""
+        dishPicker.currentIndex = 0
+        portionRatioField.text = ""
+        selectedDishNoteField.text = ""
+
+        if (dishesOnly) {
+            return
+        }
+
+        const now = new Date()
+        mealTypeBox.currentIndex = comboIndexByValue(mealTypeBox, meal.mealType)
+        weekdayBox.currentIndex = weekdayIndexForValue(weekdayValueForDate(now))
+        locationTypeBox.currentIndex = comboIndexByValue(locationTypeBox, meal.locationType)
+        diningModeBox.currentIndex = comboIndexByValue(diningModeBox, meal.diningMode)
+        eatenAtField.text = Qt.formatDateTime(now, "yyyy-MM-ddThh:mm:ss")
+        totalPriceField.text = String(meal.totalPrice)
+        eatTimeField.text = String(meal.totalEatTimeMinutes)
+        nextClassField.text = "0"
+        hungerSlider.value = 3
+        energySlider.value = 3
+        classAfterMealCheck.checked = false
+        moodField.text = ""
+        mealNotesField.text = ""
     }
 
     function weightDirectionLabel(direction) {
@@ -226,14 +326,21 @@ ScrollView {
     function addPickedDish(dishMap) {
         const defaultWeight = dishMap ? dishMap.mealImpactWeight : 1.0
         const rawWeight = Number(portionRatioField.text || defaultWeight)
+        const selectionWasEmpty = mealLogManager.selectedDishes.length === 0
         const ok = mealLogManager.addSelectedDish(
             dishMap.id,
             rawWeight > 0 ? rawWeight : defaultWeight,
             selectedDishNoteField.text
         )
         if (ok) {
-            portionRatioField.text = "1.0"
+            if (selectionWasEmpty && dishMap.defaultDiningMode) {
+                diningModeBox.currentIndex = comboIndexByValue(diningModeBox, dishMap.defaultDiningMode)
+            }
+            portionRatioField.text = ""
             selectedDishNoteField.text = ""
+            dishSearchField.text = ""
+            mealLogManager.setDishSearch("")
+            dishPicker.currentIndex = 0
         }
     }
 
@@ -281,7 +388,7 @@ ScrollView {
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    text: "用多道菜拼一顿饭，复用常吃菜，并直接修正最近餐次，不需要手动碰 SQLite。"
+                    text: "先从最近吃过的整餐或常点菜开始复用，再补今天这顿的细节，尽量把一次真实录餐压到几十秒。"
                     color: "#5a4a3b"
                 }
 
@@ -317,6 +424,91 @@ ScrollView {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
+            color: "#f2eadf"
+            visible: mealLogManager.recentMeals.length > 0
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 12
+
+                Label {
+                    text: "最近餐次快捷复用"
+                    font.pixelSize: 20
+                    font.bold: true
+                    color: "#3b2b1f"
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: "优先复用最近真的吃过的一整餐；如果这顿只想沿用菜品组合，就点“只加菜品”。"
+                    color: "#6b5644"
+                }
+
+                Repeater {
+                    model: mealLogManager.recentMeals
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: index < 4
+                        radius: 14
+                        color: "#fff8ef"
+                        border.color: "#dcc9b5"
+                        border.width: 1
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 6
+
+                            RowLayout {
+                                Layout.fillWidth: true
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
+                                    font.bold: true
+                                    color: "#2e241a"
+                                }
+
+                                Button {
+                                    text: "复用这餐"
+                                    onClicked: applyMealTemplate(modelData, false)
+                                }
+
+                                Button {
+                                    text: "只加菜品"
+                                    onClicked: applyMealTemplate(modelData, true)
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: modelData.dishSummary
+                                color: "#5f4d3d"
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: "地点 " + root.optionLabel(root.locationTypeOptions, modelData.locationType)
+                                      + " | 方式 " + root.optionLabel(root.diningModeOptions, modelData.diningMode)
+                                      + " | 价格 " + modelData.totalPrice
+                                      + " | 用餐 " + modelData.totalEatTimeMinutes + " 分钟"
+                                color: "#7b6756"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.margins: 16
+            radius: 20
             color: "#e6efe4"
 
             ColumnLayout {
@@ -331,6 +523,13 @@ ScrollView {
                     color: "#223127"
                 }
 
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: "时间默认填现在；复用最近餐次时，会回填最常重复的信息，避免你每顿都从零开始。"
+                    color: "#45614b"
+                }
+
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 2
@@ -340,20 +539,22 @@ ScrollView {
                     ComboBox {
                         id: mealTypeBox
                         Layout.fillWidth: true
-                        model: ["breakfast", "lunch", "dinner", "snack"]
+                        model: root.mealTypeOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     ComboBox {
                         id: weekdayBox
                         Layout.fillWidth: true
                         model: [
-                            { label: "Monday", value: 1 },
-                            { label: "Tuesday", value: 2 },
-                            { label: "Wednesday", value: 3 },
-                            { label: "Thursday", value: 4 },
-                            { label: "Friday", value: 5 },
-                            { label: "Saturday", value: 6 },
-                            { label: "Sunday", value: 7 }
+                            { label: "周一", value: 1 },
+                            { label: "周二", value: 2 },
+                            { label: "周三", value: 3 },
+                            { label: "周四", value: 4 },
+                            { label: "周五", value: 5 },
+                            { label: "周六", value: 6 },
+                            { label: "周日", value: 7 }
                         ]
                         textRole: "label"
                         valueRole: "value"
@@ -362,37 +563,46 @@ ScrollView {
                     ComboBox {
                         id: locationTypeBox
                         Layout.fillWidth: true
-                        model: ["campus", "dorm", "commute", "off_campus"]
+                        model: root.locationTypeOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     ComboBox {
                         id: diningModeBox
                         Layout.fillWidth: true
-                        model: ["dine_in", "takeaway", "delivery"]
+                        model: root.diningModeOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     TextField {
                         id: eatenAtField
                         Layout.fillWidth: true
-                        placeholderText: "ISO datetime"
+                        placeholderText: "用餐时间（例如 2026-04-22T12:30:00）"
                     }
 
                     TextField {
                         id: totalPriceField
                         Layout.fillWidth: true
-                        placeholderText: "Total price"
+                        placeholderText: "总价"
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
 
                     TextField {
                         id: eatTimeField
                         Layout.fillWidth: true
-                        placeholderText: "Total eat time minutes"
+                        placeholderText: "用餐分钟数"
+                        inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: nextClassField
                         Layout.fillWidth: true
-                        placeholderText: "Minutes until next class"
+                        placeholderText: "距离下节课还有几分钟"
+                        enabled: classAfterMealCheck.checked
+                        opacity: classAfterMealCheck.checked ? 1.0 : 0.6
+                        inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     Slider {
@@ -417,19 +627,33 @@ ScrollView {
                 CheckBox {
                     id: classAfterMealCheck
                     text: "餐后有课"
+                    onToggled: {
+                        if (!checked) {
+                            nextClassField.text = "0"
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: classAfterMealCheck.checked
+                          ? "勾选后请补上距离下节课的分钟数，保存时会做一致性校验。"
+                          : "没课时会自动按 0 分钟保存，避免留下不一致状态。"
+                    color: "#5d7359"
                 }
 
                 TextField {
                     id: moodField
                     Layout.fillWidth: true
-                    placeholderText: "Mood tag"
+                    placeholderText: "餐前状态标签"
                 }
 
                 TextArea {
                     id: mealNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-                    placeholderText: "Meal notes"
+                    placeholderText: "这顿饭的备注"
                     wrapMode: TextEdit.Wrap
                 }
             }
@@ -456,8 +680,27 @@ ScrollView {
                 TextField {
                     id: dishSearchField
                     Layout.fillWidth: true
-                    placeholderText: "搜索菜品"
-                    onTextChanged: mealLogManager.setDishSearch(text)
+                    placeholderText: "搜索菜品，回车直接加入第一项"
+                    onTextChanged: {
+                        mealLogManager.setDishSearch(text)
+                        dishPicker.currentIndex = 0
+                    }
+                    onAccepted: {
+                        if (mealLogManager.filteredAvailableDishes.length > 0) {
+                            addPickedDish(mealLogManager.filteredAvailableDishes[0])
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: mealLogManager.filteredAvailableDishes.length > 0
+                          ? (dishSearchField.text.length > 0
+                                 ? "当前命中 " + mealLogManager.filteredAvailableDishes.length + " 道菜；结果会优先把更贴近搜索、且最近更常用的菜排在前面。"
+                                 : "当前可选 " + mealLogManager.filteredAvailableDishes.length + " 道菜；未搜索时会优先把最近更常用的菜排在前面。")
+                          : "没有命中当前搜索，可以先清空搜索或去 Food 页面补菜品。"
+                    color: "#617047"
                 }
 
                 Flow {
@@ -492,14 +735,15 @@ ScrollView {
                     TextField {
                         id: portionRatioField
                         Layout.fillWidth: true
-                        placeholderText: "影响权重"
+                        placeholderText: "影响权重（留空用默认值）"
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                 }
 
                 TextField {
                     id: selectedDishNoteField
                     Layout.fillWidth: true
-                    placeholderText: "这道菜的备注"
+                    placeholderText: "这道菜的备注（可留空）"
                 }
 
                 Button {
@@ -601,13 +845,13 @@ ScrollView {
                     enabled: mealLogManager.selectedDishes.length > 0
                     onClicked: {
                         const ok = mealLogManager.saveMealLog(
-                            mealTypeBox.currentText,
+                            mealTypeBox.currentValue,
                             eatenAtField.text,
                             weekdayBox.currentValue,
                             classAfterMealCheck.checked,
                             Number(nextClassField.text || "0"),
-                            locationTypeBox.currentText,
-                            diningModeBox.currentText,
+                            locationTypeBox.currentValue,
+                            diningModeBox.currentValue,
                             Number(totalPriceField.text || "0"),
                             Number(eatTimeField.text || "0"),
                             Math.round(hungerSlider.value),
@@ -1163,14 +1407,25 @@ ScrollView {
                             anchors.margins: 12
                             spacing: 6
 
-                            RowLayout {
+                            Label {
                                 Layout.fillWidth: true
+                                text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
+                                font.bold: true
+                                color: "#2e241a"
+                            }
 
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
-                                    font.bold: true
-                                    color: "#2e241a"
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Button {
+                                    text: "复用这餐"
+                                    onClicked: applyMealTemplate(modelData, false)
+                                }
+
+                                Button {
+                                    text: "只加菜"
+                                    onClicked: applyMealTemplate(modelData, true)
                                 }
 
                                 Button {

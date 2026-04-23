@@ -10,7 +10,7 @@
 
 namespace
 {
-QString connectionName()
+QString defaultConnectionName()
 {
     return QStringLiteral("mealadvisor_connection");
 }
@@ -100,7 +100,7 @@ QStringList recommendationProfileSeedStatements()
 
 DatabaseManager::DatabaseManager(QObject *parent)
     : QObject(parent),
-      m_connectionName(connectionName()),
+      m_connectionName(defaultConnectionName()),
       m_databasePath(AppConfig::databaseFilePath())
 {
 }

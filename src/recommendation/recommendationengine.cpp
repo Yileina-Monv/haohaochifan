@@ -16,10 +16,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QJsonValue>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSet>
+#include <QTimer>
 #include <QTime>
 #include <QUrl>
 #include <QVariantMap>
@@ -30,6 +32,110 @@
 namespace
 {
 using WeightMap = QHash<QString, double>;
+
+constexpr double kValueCompareEpsilon = 0.0001;
+constexpr int kSupplementTimeoutMs = 15000;
+
+const QStringList kSupplementTopLevelKeys = {
+    QStringLiteral("version"),
+    QStringLiteral("result")
+};
+
+const QStringList kSupplementResultKeys = {
+    QStringLiteral("hungerIntent"),
+    QStringLiteral("carbIntent"),
+    QStringLiteral("drinkIntent"),
+    QStringLiteral("budgetFlexIntent"),
+    QStringLiteral("classConstraintWeight"),
+    QStringLiteral("postMealSleepPlan"),
+    QStringLiteral("plannedNapMinutes"),
+    QStringLiteral("sleepNeedLevel"),
+    QStringLiteral("sleepPlanConfidence"),
+    QStringLiteral("proteinIntent"),
+    QStringLiteral("colaIntent"),
+    QStringLiteral("flavorIntent"),
+    QStringLiteral("relaxedTimePreference")
+};
+
+const QList<double> kWeakIntentValues = {
+    0.75, 0.85, 0.95, 1.0, 1.1, 1.2, 1.35
+};
+
+const QList<double> kStrongIntentValues = {
+    0.4, 0.5, 0.65, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5
+};
+
+const QList<double> kGovernanceValues = {
+    0.0, 0.25, 0.5, 0.75, 1.0
+};
+
+const QList<int> kNapMinuteValues = {
+    0, 10, 15, 20, 30, 40, 45, 60, 90
+};
+
+const QStringList kSleepPlanValues = {
+    QStringLiteral("stay_awake"),
+    QStringLiteral("nap_before_class"),
+    QStringLiteral("no_class"),
+    QStringLiteral("unknown")
+};
+
+bool nearlyEqual(double left, double right)
+{
+    return std::abs(left - right) <= kValueCompareEpsilon;
+}
+
+bool containsAllowedValue(double value, const QList<double> &allowedValues)
+{
+    for (const double allowedValue : allowedValues) {
+        if (nearlyEqual(value, allowedValue)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool containsAllowedInt(int value, const QList<int> &allowedValues)
+{
+    return allowedValues.contains(value);
+}
+
+double weakIntentDelta(double multiplier)
+{
+    return multiplier - 1.0;
+}
+
+double strongIntentDelta(double multiplier)
+{
+    return multiplier - 1.0;
+}
+
+bool isNeutralValue(double value, double neutralValue)
+{
+    return nearlyEqual(value, neutralValue);
+}
+
+QDateTime effectiveCurrentDateTime()
+{
+    const QString overrideText =
+        qEnvironmentVariable("MEALADVISOR_FIXED_NOW").trimmed();
+    if (overrideText.isEmpty()) {
+        return QDateTime::currentDateTime();
+    }
+
+    const QDateTime parsedIso = QDateTime::fromString(overrideText, Qt::ISODate);
+    if (parsedIso.isValid()) {
+        return parsedIso;
+    }
+
+    const QDateTime parsedSql =
+        QDateTime::fromString(overrideText, QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (parsedSql.isValid()) {
+        return parsedSql;
+    }
+
+    return QDateTime::currentDateTime();
+}
 
 struct MealContext
 {
@@ -299,6 +405,137 @@ QString mealLabel(const QString &mealType)
     return mealType;
 }
 
+QString boolLabel(bool value)
+{
+    return value ? QStringLiteral("true") : QStringLiteral("false");
+}
+
+QString supplementParserSystemPrompt()
+{
+    return QStringLiteral(
+        "You are MealAdvisor's supplement parser.\n\n"
+        "Your only job is to convert one user's meal-related natural-language supplement into a strictly valid JSON object.\n\n"
+        "You are NOT a chatbot.\n"
+        "You are NOT a recommender.\n"
+        "You do NOT explain your reasoning.\n"
+        "You do NOT output markdown.\n"
+        "You do NOT output code fences.\n"
+        "You do NOT output natural language.\n"
+        "You do NOT output extra keys.\n"
+        "You do NOT omit required keys.\n"
+        "You do NOT guess facts that are not supported by the input.\n\n"
+        "You must always return exactly one JSON object with this shape:\n\n"
+        "{\n"
+        "  \"version\": \"supplement_parser_v1\",\n"
+        "  \"result\": {\n"
+        "    \"hungerIntent\": 1.0,\n"
+        "    \"carbIntent\": 1.0,\n"
+        "    \"drinkIntent\": 1.0,\n"
+        "    \"budgetFlexIntent\": 1.0,\n"
+        "    \"classConstraintWeight\": 1.0,\n"
+        "    \"postMealSleepPlan\": \"unknown\",\n"
+        "    \"plannedNapMinutes\": 0,\n"
+        "    \"sleepNeedLevel\": 1.0,\n"
+        "    \"sleepPlanConfidence\": 0.0,\n"
+        "    \"proteinIntent\": 1.0,\n"
+        "    \"colaIntent\": 1.0,\n"
+        "    \"flavorIntent\": 1.0,\n"
+        "    \"relaxedTimePreference\": 1.0\n"
+        "  }\n"
+        "}\n\n"
+        "Rules:\n"
+        "1. All keys are required.\n"
+        "2. No extra keys are allowed.\n"
+        "3. Only output JSON.\n"
+        "4. No explanation, no comments, no markdown.\n\n"
+        "Field constraints:\n\n"
+        "Weak-judgment fields:\n"
+        "- hungerIntent\n"
+        "- carbIntent\n"
+        "- drinkIntent\n"
+        "- budgetFlexIntent\n"
+        "- proteinIntent\n"
+        "- colaIntent\n"
+        "- flavorIntent\n\n"
+        "Allowed values for weak-judgment fields:\n"
+        "0.75, 0.85, 0.95, 1.0, 1.1, 1.2, 1.35\n\n"
+        "Strong-judgment fields:\n"
+        "- classConstraintWeight\n"
+        "- sleepNeedLevel\n"
+        "- relaxedTimePreference\n\n"
+        "Allowed values for strong-judgment fields:\n"
+        "0.4, 0.5, 0.65, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5\n\n"
+        "Governance field:\n"
+        "- sleepPlanConfidence\n"
+        "Allowed values:\n"
+        "0.0, 0.25, 0.5, 0.75, 1.0\n\n"
+        "Enum field:\n"
+        "- postMealSleepPlan\n"
+        "Allowed values:\n"
+        "\"stay_awake\", \"nap_before_class\", \"no_class\", \"unknown\"\n\n"
+        "Integer field:\n"
+        "- plannedNapMinutes\n"
+        "Allowed values:\n"
+        "0, 10, 15, 20, 30, 40, 45, 60, 90\n\n"
+        "Interpretation rules:\n"
+        "- Strong-judgment fields are only for explicit scenario changes or explicit after-meal state changes.\n"
+        "- Weak-judgment fields are only for ordinary preference signals.\n"
+        "- Ordinary preference must not override hard scenario constraints.\n"
+        "- If input is vague, use neutral defaults.\n"
+        "- If the user explicitly says the situation changed, you may use strong-judgment values, including extreme values.\n"
+        "- If there is not enough evidence, stay conservative.\n"
+        "- If the user explicitly mentions class soon, rushing to class, or needing a steady meal before class, raise classConstraintWeight above 1.0 instead of leaving it neutral.\n"
+        "- If the user explicitly says they need to stay awake or avoid drowsiness, set postMealSleepPlan to stay_awake and usually raise sleepNeedLevel above 1.0 when the wording is strong.\n"
+        "- If the user explicitly says they will nap before class and gives a duration, set postMealSleepPlan to nap_before_class, fill plannedNapMinutes, and use high sleepPlanConfidence.\n"
+        "- If the user explicitly says budget can be relaxed, raise budgetFlexIntent above 1.0; if the user explicitly wants cola, raise colaIntent above 1.0.\n\n"
+        "Special priority rules:\n\n"
+        "1. Explicit scenario change > ordinary preference\n"
+        "2. Explicit stay-awake requirement > ordinary carb preference\n"
+        "3. Explicit nap/rest plan > default class pressure\n"
+        "4. If conflicting signals remain unresolved, stay conservative\n\n"
+        "You must be stable.\n"
+        "Do not invent unsupported urgency, class changes, nap plans, or budget changes.");
+}
+
+QString contextSummary(const MealContext &context)
+{
+    QStringList parts;
+    parts.append(QStringLiteral("%1 %2")
+                     .arg(context.targetDate.toString(QStringLiteral("yyyy-MM-dd")),
+                          weekdayLabel(context.weekday)));
+    parts.append(context.mealLabel);
+    if (context.hasClassAfterMeal && context.minutesUntilNextClass > 0) {
+        parts.append(QStringLiteral("next class in %1 minutes")
+                         .arg(context.minutesUntilNextClass));
+    } else {
+        parts.append(QStringLiteral("no near class constraint"));
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+QString supplementParserUserPrompt(const MealContext &context, const QString &userText)
+{
+    return QStringLiteral(
+               "Parse the following meal supplement into the required JSON format.\n\n"
+               "Current context:\n"
+               "- mealType: %1\n"
+               "- targetDate: %2\n"
+               "- weekday: %3\n"
+               "- hasClassAfterMeal: %4\n"
+               "- minutesUntilNextClass: %5\n"
+               "- currentContextSummary: %6\n\n"
+               "User supplement text:\n"
+               "%7\n\n"
+               "Return JSON only.")
+        .arg(context.mealType,
+             context.targetDate.toString(QStringLiteral("yyyy-MM-dd")),
+             weekdayLabel(context.weekday),
+             boolLabel(context.hasClassAfterMeal),
+             QString::number(context.minutesUntilNextClass),
+             contextSummary(context),
+             userText);
+}
+
 bool containsKeyword(const QString &text, const QStringList &keywords)
 {
     const QString lower = text.toLower();
@@ -451,7 +688,7 @@ MealContext buildMealContext(const QList<PlanningPolicy> &policies,
         context.policy.enabledWeekdays = {2, 3, 4, 5};
     }
 
-    const QDateTime now = QDateTime::currentDateTime();
+    const QDateTime now = effectiveCurrentDateTime();
     QDate targetDate = now.date();
     QString targetMealType;
 
@@ -878,8 +1115,10 @@ SleepPlanModifier resolveSleepPlanModifier(
     const RecommendationEngine::SupplementAdjustment &adjustment)
 {
     SleepPlanModifier modifier;
+    const double sleepNeedStrength =
+        clamp01(0.5 + strongIntentDelta(adjustment.sleepNeedLevel) / 1.5);
     const double signalStrength =
-        clamp01((adjustment.sleepNeedLevel + adjustment.sleepPlanConfidence) / 2.0);
+        clamp01((sleepNeedStrength + adjustment.sleepPlanConfidence) / 2.0);
 
     if (adjustment.postMealSleepPlan == QStringLiteral("stay_awake")) {
         modifier.label = QStringLiteral("饭后保持清醒");
@@ -957,20 +1196,10 @@ QVariantList buildBreakdownList(const CandidateSignals &metrics)
     return breakdown;
 }
 
-QString directJsonContent(const QJsonObject &object)
-{
-    if (object.contains(QStringLiteral("summary")) &&
-        object.value(QStringLiteral("summary")).isString()) {
-        return QString::fromUtf8(
-            QJsonDocument(object).toJson(QJsonDocument::Compact));
-    }
-    return QString();
-}
-
 QString extractTextFromMessageContent(const QJsonValue &contentValue)
 {
     if (contentValue.isString()) {
-        return contentValue.toString();
+        return contentValue.toString().trimmed();
     }
 
     if (contentValue.isArray()) {
@@ -981,29 +1210,82 @@ QString extractTextFromMessageContent(const QJsonValue &contentValue)
                 continue;
             }
             const QJsonObject partObject = partValue.toObject();
-            if (partObject.value(QStringLiteral("type")).toString() ==
-                QStringLiteral("text")) {
+            const QString type = partObject.value(QStringLiteral("type")).toString();
+            if (type == QStringLiteral("text") ||
+                type == QStringLiteral("output_text")) {
                 parts.append(partObject.value(QStringLiteral("text")).toString());
             }
         }
-        return parts.join(QString());
+        return parts.join(QString()).trimmed();
     }
 
     return QString();
 }
 
-QString extractJsonTextFromApiResponse(const QByteArray &payload)
+bool parseStrictJsonObject(const QByteArray &payload, QJsonObject *object)
 {
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        return QString::fromUtf8(payload);
+        return false;
     }
 
-    const QJsonObject rootObject = document.object();
-    const QString directContent = directJsonContent(rootObject);
-    if (!directContent.isEmpty()) {
-        return directContent;
+    if (object != nullptr) {
+        *object = document.object();
+    }
+    return true;
+}
+
+bool validateExactKeys(const QJsonObject &object,
+                       const QStringList &expectedKeys,
+                       QString *error)
+{
+    if (object.keys().size() != expectedKeys.size()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("unexpected key count");
+        }
+        return false;
+    }
+
+    for (const QString &expectedKey : expectedKeys) {
+        if (!object.contains(expectedKey)) {
+            if (error != nullptr) {
+                *error = QStringLiteral("missing key: %1").arg(expectedKey);
+            }
+            return false;
+        }
+    }
+
+    for (const QString &actualKey : object.keys()) {
+        if (!expectedKeys.contains(actualKey)) {
+            if (error != nullptr) {
+                *error = QStringLiteral("extra key: %1").arg(actualKey);
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool extractContractObjectFromApiResponse(const QByteArray &payload,
+                                          QJsonObject *contractObject,
+                                          QString *error)
+{
+    QJsonObject rootObject;
+    if (!parseStrictJsonObject(payload, &rootObject)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("response body is not JSON");
+        }
+        return false;
+    }
+
+    if (rootObject.contains(QStringLiteral("version")) &&
+        rootObject.contains(QStringLiteral("result"))) {
+        if (contractObject != nullptr) {
+            *contractObject = rootObject;
+        }
+        return true;
     }
 
     const QJsonArray choices = rootObject.value(QStringLiteral("choices")).toArray();
@@ -1011,8 +1293,28 @@ QString extractJsonTextFromApiResponse(const QByteArray &payload)
         const QJsonObject firstChoice = choices.first().toObject();
         const QJsonObject messageObject =
             firstChoice.value(QStringLiteral("message")).toObject();
-        return extractTextFromMessageContent(
-            messageObject.value(QStringLiteral("content")));
+        const QJsonValue parsedValue = messageObject.value(QStringLiteral("parsed"));
+        if (parsedValue.isObject()) {
+            if (contractObject != nullptr) {
+                *contractObject = parsedValue.toObject();
+            }
+            return true;
+        }
+
+        const QString content =
+            extractTextFromMessageContent(messageObject.value(QStringLiteral("content")));
+        QJsonObject parsedContentObject;
+        if (parseStrictJsonObject(content.toUtf8(), &parsedContentObject)) {
+            if (contractObject != nullptr) {
+                *contractObject = parsedContentObject;
+            }
+            return true;
+        }
+
+        if (error != nullptr) {
+            *error = QStringLiteral("message content is not strict JSON");
+        }
+        return false;
     }
 
     const QJsonArray outputArray = rootObject.value(QStringLiteral("output")).toArray();
@@ -1022,46 +1324,118 @@ QString extractJsonTextFromApiResponse(const QByteArray &payload)
             firstOutput.value(QStringLiteral("content")).toArray();
         for (const QJsonValue &contentValue : contentArray) {
             const QJsonObject contentObject = contentValue.toObject();
-            const QString text = contentObject.value(QStringLiteral("text")).toString();
-            if (!text.isEmpty()) {
-                return text;
+            const QString text = contentObject.value(QStringLiteral("text")).toString().trimmed();
+            QJsonObject parsedContentObject;
+            if (!text.isEmpty() &&
+                parseStrictJsonObject(text.toUtf8(), &parsedContentObject)) {
+                if (contractObject != nullptr) {
+                    *contractObject = parsedContentObject;
+                }
+                return true;
             }
         }
+        if (error != nullptr) {
+            *error = QStringLiteral("output content is not strict JSON");
+        }
+        return false;
     }
 
-    return QString::fromUtf8(payload);
+    if (error != nullptr) {
+        *error = QStringLiteral("response does not contain a chat completion message");
+    }
+    return false;
 }
 
-QJsonObject extractStructuredObject(const QString &rawText)
+bool readAllowedDouble(const QJsonObject &object,
+                       const QString &key,
+                       const QList<double> &allowedValues,
+                       double *value,
+                       QString *error)
 {
-    const int start = rawText.indexOf('{');
-    const int end = rawText.lastIndexOf('}');
-    if (start < 0 || end <= start) {
-        return {};
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isDouble()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 must be a number").arg(key);
+        }
+        return false;
     }
 
-    QJsonParseError parseError;
-    const QJsonDocument document =
-        QJsonDocument::fromJson(rawText.mid(start, end - start + 1).toUtf8(),
-                                &parseError);
-    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        return {};
+    const double parsedValue = jsonValue.toDouble();
+    if (!containsAllowedValue(parsedValue, allowedValues)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        }
+        return false;
     }
 
-    return document.object();
+    if (value != nullptr) {
+        *value = parsedValue;
+    }
+    return true;
 }
 
-double jsonDouble(const QJsonObject &object,
-                  const QString &key,
-                  double minimumValue,
-                  double maximumValue,
-                  double fallback = 0.0)
+bool readAllowedInt(const QJsonObject &object,
+                    const QString &key,
+                    const QList<int> &allowedValues,
+                    int *value,
+                    QString *error)
 {
-    const QJsonValue value = object.value(key);
-    if (!value.isDouble()) {
-        return fallback;
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isDouble()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 must be an integer").arg(key);
+        }
+        return false;
     }
-    return clampRange(value.toDouble(), minimumValue, maximumValue);
+
+    const double parsedDouble = jsonValue.toDouble();
+    const int parsedValue = static_cast<int>(std::round(parsedDouble));
+    if (!nearlyEqual(parsedDouble, parsedValue)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 must be an integer").arg(key);
+        }
+        return false;
+    }
+
+    if (!containsAllowedInt(parsedValue, allowedValues)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = parsedValue;
+    }
+    return true;
+}
+
+bool readAllowedString(const QJsonObject &object,
+                       const QString &key,
+                       const QStringList &allowedValues,
+                       QString *value,
+                       QString *error)
+{
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isString()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 must be a string").arg(key);
+        }
+        return false;
+    }
+
+    const QString parsedValue = jsonValue.toString().trimmed();
+    if (!allowedValues.contains(parsedValue)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = parsedValue;
+    }
+    return true;
 }
 
 QStringList buildReasons(const Dish &dish,
@@ -1219,6 +1593,75 @@ QVariantList buildWeightList(
 {
     QVariantList weights;
 
+    const auto appendNormalizedWeight = [&weights](const QString &label,
+                                                   const QString &value) {
+        QVariantMap item;
+        item.insert(QStringLiteral("label"), label);
+        item.insert(QStringLiteral("value"), value);
+        weights.append(item);
+    };
+
+    if (!isNeutralValue(adjustment.hungerIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("饥饿倾向"),
+                               QString::number(adjustment.hungerIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.carbIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("碳水倾向"),
+                               QString::number(adjustment.carbIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.drinkIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("饮品倾向"),
+                               QString::number(adjustment.drinkIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.budgetFlexIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("预算放宽"),
+                               QString::number(adjustment.budgetFlexIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.classConstraintWeight, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("课程约束"),
+                               QString::number(adjustment.classConstraintWeight, 'f', 2));
+    }
+    if (adjustment.postMealSleepPlan != QStringLiteral("unknown")) {
+        appendNormalizedWeight(QStringLiteral("饭后安排"),
+                               adjustment.postMealSleepPlan);
+    }
+    if (adjustment.plannedNapMinutes > 0) {
+        appendNormalizedWeight(QStringLiteral("计划小睡"),
+                               QStringLiteral("%1 分钟").arg(adjustment.plannedNapMinutes));
+    }
+    if (!isNeutralValue(adjustment.sleepNeedLevel, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("困意强度"),
+                               QString::number(adjustment.sleepNeedLevel, 'f', 2));
+    }
+    if (adjustment.sleepPlanConfidence > 0.0) {
+        appendNormalizedWeight(QStringLiteral("睡眠计划置信度"),
+                               QString::number(adjustment.sleepPlanConfidence, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.proteinIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("蛋白倾向"),
+                               QString::number(adjustment.proteinIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.colaIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("可乐倾向"),
+                               QString::number(adjustment.colaIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.flavorIntent, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("口味偏好"),
+                               QString::number(adjustment.flavorIntent, 'f', 2));
+    }
+    if (!isNeutralValue(adjustment.relaxedTimePreference, 1.0)) {
+        appendNormalizedWeight(QStringLiteral("时间宽松"),
+                               QString::number(adjustment.relaxedTimePreference, 'f', 2));
+    }
+
+    if (weights.isEmpty()) {
+        appendNormalizedWeight(QStringLiteral("补充输入"),
+                               adjustment.fallbackUsed ? QStringLiteral("默认回退")
+                                                       : QStringLiteral("中性"));
+    }
+
+    return weights;
+
     const auto appendWeight = [&weights](const QString &label, const QString &value) {
         QVariantMap item;
         item.insert(QStringLiteral("label"), label);
@@ -1285,10 +1728,16 @@ QVariantList buildWeightList(
 }
 
 RecommendationEngine::RecommendationEngine(const DatabaseManager &databaseManager,
+                                           AppSettings *appSettings,
                                            QObject *parent)
     : QObject(parent),
-      m_databaseManager(databaseManager)
+      m_databaseManager(databaseManager),
+      m_appSettings(appSettings)
 {
+    if (m_appSettings != nullptr) {
+        connect(m_appSettings, &AppSettings::llmSettingsChanged,
+                this, &RecommendationEngine::refreshSupplementConfigState);
+    }
     setInitialState();
 }
 
@@ -1320,6 +1769,16 @@ QString RecommendationEngine::supplementSummary() const
 QString RecommendationEngine::supplementStatus() const
 {
     return m_supplementStatus;
+}
+
+QString RecommendationEngine::supplementState() const
+{
+    return m_supplementState;
+}
+
+bool RecommendationEngine::supplementFallbackActive() const
+{
+    return m_supplementFallbackActive;
 }
 
 QVariantList RecommendationEngine::supplementWeights() const
@@ -1371,9 +1830,29 @@ void RecommendationEngine::runDecision()
     MealContext context =
         buildMealContext(policies, profiles, scheduleRepository);
 
+    const double classConstraintDelta =
+        strongIntentDelta(m_adjustment.classConstraintWeight);
+    const double relaxedTimeDelta =
+        strongIntentDelta(m_adjustment.relaxedTimePreference);
+    const double hungerIntentDelta = weakIntentDelta(m_adjustment.hungerIntent);
+    const double carbIntentDelta = weakIntentDelta(m_adjustment.carbIntent);
+    const double budgetFlexDelta = weakIntentDelta(m_adjustment.budgetFlexIntent);
+    const double drinkIntentDelta = weakIntentDelta(m_adjustment.drinkIntent);
+    const double proteinIntentDelta = weakIntentDelta(m_adjustment.proteinIntent);
+    const double colaIntentDelta = weakIntentDelta(m_adjustment.colaIntent);
+    const double beverageIntentDelta =
+        drinkIntentDelta > 0.0
+            ? drinkIntentDelta
+            : (colaIntentDelta > 0.0 ? colaIntentDelta * 0.75
+                                     : drinkIntentDelta);
+    const double flavorIntentDelta = weakIntentDelta(m_adjustment.flavorIntent);
+    const bool classConstraintFullyRelaxed =
+        m_adjustment.hasParsed &&
+        m_adjustment.classConstraintWeight <= 0.65;
+
     bool classPressureWasRelaxed = false;
     if (m_adjustment.hasParsed &&
-        m_adjustment.skipClassConstraint &&
+        classConstraintFullyRelaxed &&
         context.hasClassAfterMeal) {
         context.hasClassAfterMeal = false;
         context.minutesUntilNextClass = 0;
@@ -1428,15 +1907,29 @@ void RecommendationEngine::runDecision()
         context.policy.defaultDailyBudget > 0.0 ? context.policy.defaultDailyBudget : 80.0;
     const double baseFlexibleBudget =
         context.policy.flexibleBudgetCap > 0.0 ? context.policy.flexibleBudgetCap : 120.0;
-    const double budgetScale = 1.0 + std::max(-0.25, m_adjustment.budgetFlexIntent) * 0.25;
+    const double budgetScale = 1.0 + clampRange(budgetFlexDelta, -0.25, 0.35) * 0.25;
+    const double budgetRelaxBlend =
+        m_adjustment.hasParsed && budgetFlexDelta > 0.0
+            ? clamp01(budgetFlexDelta / 0.35)
+            : 0.0;
+    const bool relaxedBudgetDinnerScene =
+        budgetRelaxBlend > 0.0 &&
+        !classPressure &&
+        context.mealType == QStringLiteral("dinner");
     const double mealBudget =
         (context.mealType == QStringLiteral("breakfast") ? baseDailyBudget * 0.20
                                                          : baseDailyBudget * 0.40) *
         budgetScale;
-    const double flexibleMealBudget =
+    double flexibleMealBudget =
         (context.mealType == QStringLiteral("breakfast") ? baseFlexibleBudget * 0.24
                                                          : baseFlexibleBudget * 0.45) *
         std::max(0.85, budgetScale);
+    if (relaxedBudgetDinnerScene) {
+        const double relaxedDinnerCapShare =
+            std::min(1.0, 0.45 + budgetRelaxBlend * 0.70);
+        flexibleMealBudget =
+            std::max(flexibleMealBudget, baseFlexibleBudget * relaxedDinnerCapShare);
+    }
 
     QList<CandidateResult> rankedCandidates;
     rankedCandidates.reserve(dishes.size());
@@ -1490,11 +1983,12 @@ void RecommendationEngine::runDecision()
         const double carbTargetBase =
             classPressure ? 0.28 : (context.mealType == QStringLiteral("dinner") ? 0.45 : 0.38);
         const double carbTarget =
-            clampRange(carbTargetBase + m_adjustment.carbIntent * 0.30 -
+            clampRange(carbTargetBase + carbIntentDelta * 0.80 -
+                           classConstraintDelta * 0.08 -
                            (sleepModifier.carbPenaltyMultiplier - 1.0) * 0.15,
                        0.10, 0.85);
         const double satietyTarget =
-            clampRange(0.45 + m_adjustment.hungerIntent * 0.35, 0.30, 0.90);
+            clampRange(0.45 + hungerIntentDelta, 0.30, 0.90);
         const double fatTarget = classPressure ? 0.25 : 0.40;
 
         metrics.carbFit = closenessScore(baseCarbLevel, carbTarget) * 100.0;
@@ -1519,9 +2013,8 @@ void RecommendationEngine::runDecision()
         } else if (context.mealType == QStringLiteral("dinner")) {
             availableMinutes = 110.0;
         }
-        if (m_adjustment.relaxedTimePreference) {
-            availableMinutes += 18.0;
-        }
+        availableMinutes =
+            std::max(35.0, availableMinutes + relaxedTimeDelta * 30.0 - std::max(0.0, classConstraintDelta) * 12.0);
 
         const bool napPlanned =
             m_adjustment.postMealSleepPlan == QStringLiteral("nap_before_class");
@@ -1706,38 +2199,49 @@ void RecommendationEngine::runDecision()
              {metrics.acquireCostFit / 100.0, weights.value(QStringLiteral("budget.acquire_cost_fit"))}});
 
         metrics.hungerIntentFit =
-            clamp01(0.55 + (baseSatietyLevel - 0.45) * (0.40 + m_adjustment.hungerIntent)) *
+            closenessScore(baseSatietyLevel,
+                           clampRange(0.45 + hungerIntentDelta * 0.90, 0.25, 0.92)) *
             100.0;
         const double carbIntentTarget =
-            clampRange(carbTargetBase + m_adjustment.carbIntent * 0.35, 0.10, 0.90);
+            clampRange(carbTargetBase + carbIntentDelta * 0.90, 0.10, 0.90);
         metrics.carbIntentFit = closenessScore(baseCarbLevel, carbIntentTarget) * 100.0;
 
         double drinkIntentFit = 0.68;
-        if (m_adjustment.drinkIntent > 0.0) {
+        if (beverageIntentDelta > 0.0) {
             drinkIntentFit = snackLike ? 0.85 : 0.48;
-            if (m_adjustment.colaIntent > 0.0 && colaDish) {
+            if (colaIntentDelta > 0.0 && colaDish) {
                 drinkIntentFit = 0.95;
             }
         } else {
-            drinkIntentFit = snackLike ? 0.24 : 0.78;
+            drinkIntentFit = beverageIntentDelta < 0.0
+                                 ? (snackLike ? 0.18 : 0.84)
+                                 : (snackLike ? 0.24 : 0.78);
         }
         metrics.drinkIntentFit = drinkIntentFit * 100.0;
 
         const double budgetIntentTarget =
-            m_adjustment.budgetFlexIntent > 0.0 ? flexibleMealBudget : mealBudget;
+            mealBudget + (flexibleMealBudget - mealBudget) *
+                             clamp01((m_adjustment.budgetFlexIntent - 0.75) / 0.60);
         metrics.budgetFlexIntentFit =
             clamp01(1.0 - std::abs(dish.price - budgetIntentTarget) /
                              std::max(20.0, budgetIntentTarget)) *
             100.0;
 
         double skipConstraintFit = 0.55;
-        if (m_adjustment.skipClassConstraint) {
+        if (context.hasClassAfterMeal &&
+            m_adjustment.classConstraintWeight < 1.0) {
+            const double relaxedBlend =
+                clamp01((1.0 - m_adjustment.classConstraintWeight) / 0.60);
             skipConstraintFit =
-                clamp01(0.60 + positiveLevelScore(dish.flavorLevel) * 0.20 +
-                        positiveLevelScore(dish.satietyLevel) * 0.20) *
+                clamp01((0.55 * (1.0 - relaxedBlend)) +
+                        (0.60 + positiveLevelScore(dish.flavorLevel) * 0.20 +
+                         positiveLevelScore(dish.satietyLevel) * 0.20) * relaxedBlend) *
                 100.0;
         } else if (!context.hasClassAfterMeal) {
             skipConstraintFit = 60.0;
+        } else if (m_adjustment.classConstraintWeight > 1.0) {
+            skipConstraintFit =
+                clamp01(0.55 - std::max(0.0, classConstraintDelta) * 0.18) * 100.0;
         }
         metrics.skipClassConstraintFit = skipConstraintFit;
 
@@ -1758,13 +2262,24 @@ void RecommendationEngine::runDecision()
 
         metrics.totalScore += mealImpactFit * 4.5;
         metrics.totalScore += positiveLevelScore(dish.flavorLevel) *
-                              (2.0 + m_adjustment.flavorIntent * 3.0);
+                              (2.0 + std::max(0.0, flavorIntentDelta) * 8.0);
         metrics.totalScore += positiveLevelScore(dish.proteinLevel) *
-                              (1.5 + m_adjustment.proteinIntent * 2.5);
-        if (colaDish && m_adjustment.colaIntent > 0.0) {
-            metrics.totalScore += m_adjustment.colaIntent * 5.0;
+                              (1.5 + std::max(0.0, proteinIntentDelta) * 7.0);
+        if (relaxedBudgetDinnerScene &&
+            dish.price > mealBudget &&
+            dish.price <= flexibleMealBudget) {
+            const double relaxedSpendMatch =
+                clamp01((dish.price - mealBudget) /
+                        std::max(1.0, flexibleMealBudget - mealBudget));
+            metrics.totalScore += budgetRelaxBlend * relaxedSpendMatch * 24.0;
         }
-        if (snackLike && m_adjustment.drinkIntent <= 0.0) {
+        if (colaDish && colaIntentDelta > 0.0) {
+            metrics.totalScore += colaIntentDelta * 18.0;
+        }
+        if (snackLike && beverageIntentDelta > 0.0) {
+            metrics.totalScore += beverageIntentDelta * 8.0;
+        }
+        if (snackLike && beverageIntentDelta < 0.0) {
             metrics.totalScore -= 5.0;
         }
 
@@ -1783,7 +2298,28 @@ void RecommendationEngine::runDecision()
 
     std::sort(rankedCandidates.begin(), rankedCandidates.end(),
               [](const CandidateResult &left, const CandidateResult &right) {
-                  return left.metrics.totalScore > right.metrics.totalScore;
+                  if (std::abs(left.metrics.totalScore - right.metrics.totalScore) > 0.01) {
+                      return left.metrics.totalScore > right.metrics.totalScore;
+                  }
+                  if (std::abs(left.dish.price - right.dish.price) > 0.01) {
+                      return left.dish.price < right.dish.price;
+                  }
+
+                  const QString leftDishName = left.dish.name.trimmed().toLower();
+                  const QString rightDishName = right.dish.name.trimmed().toLower();
+                  if (leftDishName != rightDishName) {
+                      return leftDishName < rightDishName;
+                  }
+
+                  const QString leftMerchantName =
+                      left.merchant.name.trimmed().toLower();
+                  const QString rightMerchantName =
+                      right.merchant.name.trimmed().toLower();
+                  if (leftMerchantName != rightMerchantName) {
+                      return leftMerchantName < rightMerchantName;
+                  }
+
+                  return left.dish.id < right.dish.id;
               });
 
     const int candidateCount =
@@ -1842,7 +2378,7 @@ void RecommendationEngine::runDecision()
 
     RecommendationRecord record;
     record.recommendedForMealType = context.mealType;
-    record.generatedAt = QDateTime::currentDateTime();
+    record.generatedAt = effectiveCurrentDateTime();
     record.contextSummary = contextLine;
     record.strategyProfileId = context.profile.id;
     if (candidateCount >= 1) {
@@ -1882,6 +2418,7 @@ QString RecommendationEngine::previewRecommendation() const
         .arg(topCandidate.value(QStringLiteral("reason")).toString());
 }
 
+#if 0
 void RecommendationEngine::parseSupplement(const QString &text)
 {
     const QString trimmedText = text.trimmed();
@@ -1902,7 +2439,7 @@ void RecommendationEngine::parseSupplement(const QString &text)
     m_supplementStatus = QStringLiteral("正在解析补充说明...");
     emit supplementChanged();
 
-    QNetworkRequest request(QUrl(AppConfig::llmApiUrl()));
+    QNetworkRequest request{QUrl(AppConfig::llmApiUrl())};
     request.setHeader(QNetworkRequest::ContentTypeHeader,
                       QStringLiteral("application/json"));
     request.setRawHeader("Authorization",
@@ -2084,5 +2621,350 @@ void RecommendationEngine::applyParsedSupplement(
                               : adjustment.summary;
     m_supplementStatus = QStringLiteral("补充说明解析成功。");
     m_supplementWeights = buildWeightList(adjustment);
+    emit supplementChanged();
+}
+#endif
+
+RecommendationEngine::SupplementAdjustment
+RecommendationEngine::neutralSupplementAdjustment()
+{
+    return SupplementAdjustment();
+}
+
+RecommendationEngine::SupplementParseOutcome
+RecommendationEngine::evaluateSupplementResponse(const QString &sourceText,
+                                                 const QByteArray &responseBody,
+                                                 const QString &networkError,
+                                                 bool timedOut)
+{
+    SupplementParseOutcome outcome;
+    outcome.adjustment = neutralSupplementAdjustment();
+    outcome.adjustment.hasParsed = true;
+    outcome.adjustment.sourceText = sourceText.trimmed();
+
+    if (!networkError.trimmed().isEmpty()) {
+        outcome.state = QStringLiteral("network_error");
+        outcome.status = timedOut
+                             ? QStringLiteral("补充说明解析请求超时，已回退到默认参数。")
+                             : QStringLiteral("网络或接口失败：%1。已回退到默认参数。")
+                                   .arg(networkError.trimmed());
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    QJsonObject contractObject;
+    QString validationError;
+    if (!extractContractObjectFromApiResponse(responseBody, &contractObject,
+                                              &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回内容不是严格 JSON：%1。已回退到默认参数。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!validateExactKeys(contractObject, kSupplementTopLevelKeys,
+                           &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回 JSON 顶层结构非法：%1。已回退到默认参数。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QString version =
+        contractObject.value(QStringLiteral("version")).toString().trimmed();
+    if (version != QStringLiteral("supplement_parser_v1")) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回 JSON version 非法，已回退到默认参数。");
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!contractObject.value(QStringLiteral("result")).isObject()) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回 JSON result 结构非法，已回退到默认参数。");
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QJsonObject resultObject =
+        contractObject.value(QStringLiteral("result")).toObject();
+    if (!validateExactKeys(resultObject, kSupplementResultKeys,
+                           &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回 JSON result 字段非法：%1。已回退到默认参数。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    SupplementAdjustment parsedAdjustment = neutralSupplementAdjustment();
+    parsedAdjustment.hasParsed = true;
+    parsedAdjustment.sourceText = sourceText.trimmed();
+
+    if (!readAllowedDouble(resultObject, QStringLiteral("hungerIntent"),
+                           kWeakIntentValues, &parsedAdjustment.hungerIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("carbIntent"),
+                           kWeakIntentValues, &parsedAdjustment.carbIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("drinkIntent"),
+                           kWeakIntentValues, &parsedAdjustment.drinkIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("budgetFlexIntent"),
+                           kWeakIntentValues,
+                           &parsedAdjustment.budgetFlexIntent, &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("classConstraintWeight"),
+                           kStrongIntentValues,
+                           &parsedAdjustment.classConstraintWeight,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("postMealSleepPlan"),
+                           kSleepPlanValues,
+                           &parsedAdjustment.postMealSleepPlan,
+                           &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("plannedNapMinutes"),
+                        kNapMinuteValues,
+                        &parsedAdjustment.plannedNapMinutes, &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("sleepNeedLevel"),
+                           kStrongIntentValues,
+                           &parsedAdjustment.sleepNeedLevel, &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("sleepPlanConfidence"),
+                           kGovernanceValues,
+                           &parsedAdjustment.sleepPlanConfidence,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("proteinIntent"),
+                           kWeakIntentValues, &parsedAdjustment.proteinIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("colaIntent"),
+                           kWeakIntentValues, &parsedAdjustment.colaIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("flavorIntent"),
+                           kWeakIntentValues, &parsedAdjustment.flavorIntent,
+                           &validationError) ||
+        !readAllowedDouble(resultObject, QStringLiteral("relaxedTimePreference"),
+                           kStrongIntentValues,
+                           &parsedAdjustment.relaxedTimePreference,
+                           &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("返回 JSON 值非法：%1。已回退到默认参数。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    outcome.adjustment = parsedAdjustment;
+    outcome.state = QStringLiteral("success");
+    outcome.status = QStringLiteral("补充说明解析成功。");
+    outcome.accepted = true;
+    return outcome;
+}
+
+void RecommendationEngine::parseSupplement(const QString &text)
+{
+    const QString trimmedText = text.trimmed();
+    if (trimmedText.isEmpty()) {
+        m_supplementState = apiConfigured() ? QStringLiteral("ready")
+                                            : QStringLiteral("unconfigured");
+        m_supplementFallbackActive = false;
+        m_supplementStatus = QStringLiteral("请先输入补充说明。");
+        emit supplementChanged();
+        return;
+    }
+
+    if (!apiConfigured()) {
+        SupplementParseOutcome outcome;
+        outcome.adjustment = neutralSupplementAdjustment();
+        outcome.adjustment.hasParsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        outcome.adjustment.sourceText = trimmedText;
+        outcome.state = QStringLiteral("unconfigured");
+        outcome.status = QStringLiteral(
+            "LLM API 未配置，已回退到默认参数。请先设置 API Key，并按需补充 API URL / Model。");
+        outcome.fallbackUsed = true;
+        applySupplementOutcome(outcome);
+        return;
+    }
+
+    PlanningRepository planningRepository(m_databaseManager.connectionName());
+    ScheduleRepository scheduleRepository(m_databaseManager.connectionName());
+    const MealContext context =
+        buildMealContext(planningRepository.loadPlanningPolicies(),
+                         planningRepository.loadRecommendationProfiles(),
+                         scheduleRepository);
+
+    setBusy(true);
+    m_supplementState = QStringLiteral("parsing");
+    m_supplementFallbackActive = false;
+    m_supplementStatus = QStringLiteral("正在解析补充说明...");
+    m_supplementSummary = QStringLiteral("正在等待模型返回严格 JSON。");
+    emit supplementChanged();
+
+    QNetworkRequest request{QUrl(AppConfig::llmApiUrl())};
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/json"));
+    request.setRawHeader("Authorization",
+                         QStringLiteral("Bearer %1")
+                             .arg(AppConfig::llmApiKey())
+                             .toUtf8());
+
+    QJsonArray messages;
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("system")},
+        {QStringLiteral("content"), supplementParserSystemPrompt()}
+    });
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("user")},
+        {QStringLiteral("content"), supplementParserUserPrompt(context, trimmedText)}
+    });
+
+    QJsonObject payload{
+        {QStringLiteral("model"), AppConfig::llmModel()},
+        {QStringLiteral("messages"), messages},
+        {QStringLiteral("temperature"), 0},
+        {QStringLiteral("response_format"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("json_object")}}}
+    };
+
+    QNetworkReply *reply = m_networkAccessManager.post(
+        request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (!reply->isFinished()) {
+            reply->setProperty("mealadvisorTimedOut", true);
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kSupplementTimeoutMs);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, trimmedText]() {
+        const QByteArray responseBody = reply->readAll();
+        const QString networkError = reply->error() == QNetworkReply::NoError
+                                         ? QString()
+                                         : reply->errorString();
+        const bool timedOut = reply->property("mealadvisorTimedOut").toBool();
+        reply->deleteLater();
+        setBusy(false);
+
+        applySupplementOutcome(
+            evaluateSupplementResponse(trimmedText, responseBody, networkError,
+                                       timedOut));
+    });
+}
+
+void RecommendationEngine::clearSupplement()
+{
+    m_adjustment = neutralSupplementAdjustment();
+    m_adjustment.hasParsed = false;
+    m_supplementFallbackActive = false;
+    m_supplementSummary = QStringLiteral("当前没有补充说明。");
+    m_supplementStatus = QStringLiteral("已清空补充说明。");
+    m_supplementState = apiConfigured() ? QStringLiteral("ready")
+                                        : QStringLiteral("unconfigured");
+    m_supplementWeights.clear();
+    emit supplementChanged();
+}
+
+void RecommendationEngine::setWeightOverrides(const QVariantMap &overrides)
+{
+    m_weightOverrides = overrides;
+    runDecision();
+}
+
+void RecommendationEngine::clearWeightOverrides()
+{
+    m_weightOverrides.clear();
+    runDecision();
+}
+
+void RecommendationEngine::refreshSupplementConfigState()
+{
+    if (m_busy) {
+        emit supplementChanged();
+        return;
+    }
+
+    if (!m_adjustment.hasParsed || m_supplementState == QStringLiteral("unconfigured")) {
+        m_supplementState = apiConfigured() ? QStringLiteral("ready")
+                                            : QStringLiteral("unconfigured");
+        m_supplementStatus = apiConfigured()
+                                 ? QStringLiteral("补充说明解析器已就绪。")
+                                 : QStringLiteral("补充说明解析器未配置，当前会回退到默认参数。");
+        if (!m_adjustment.hasParsed) {
+            m_supplementSummary = QStringLiteral("当前没有补充说明。");
+        }
+        m_supplementFallbackActive = false;
+    }
+
+    emit supplementChanged();
+}
+
+void RecommendationEngine::setBusy(bool busy)
+{
+    if (m_busy == busy) {
+        return;
+    }
+
+    m_busy = busy;
+    emit busyChanged();
+}
+
+void RecommendationEngine::setInitialState()
+{
+    m_adjustment = neutralSupplementAdjustment();
+    m_adjustment.hasParsed = false;
+    m_summary = QStringLiteral("点击 “Judge Recommendation” 后会按当前时间窗口运行 V2 推荐。");
+    m_supplementSummary = QStringLiteral("当前没有补充说明。");
+    m_supplementStatus = apiConfigured()
+                             ? QStringLiteral("补充说明解析器已就绪。")
+                             : QStringLiteral("补充说明解析器未配置，当前会回退到默认参数。");
+    m_supplementState = apiConfigured() ? QStringLiteral("ready")
+                                        : QStringLiteral("unconfigured");
+    m_supplementFallbackActive = false;
+    m_supplementWeights.clear();
+    m_activeWeightConfig.clear();
+}
+
+void RecommendationEngine::applySupplementOutcome(
+    const SupplementParseOutcome &outcome)
+{
+    m_adjustment = outcome.adjustment;
+    m_supplementState = outcome.state;
+    m_supplementStatus = outcome.status;
+    m_supplementFallbackActive = outcome.fallbackUsed;
+    m_supplementWeights = buildWeightList(outcome.adjustment);
+
+    if (!outcome.adjustment.hasParsed) {
+        m_supplementSummary = QStringLiteral("当前没有补充说明。");
+    } else if (m_supplementWeights.size() == 1 &&
+               m_supplementWeights.first().toMap().value(QStringLiteral("label")).toString() ==
+                   QStringLiteral("补充输入")) {
+        m_supplementSummary = outcome.fallbackUsed
+                                  ? QStringLiteral("当前已回退到中性默认补充参数。")
+                                  : QStringLiteral("解析结果为中性默认值。");
+    } else {
+        QStringList labels;
+        for (const QVariant &weightVariant : m_supplementWeights) {
+            const QString label =
+                weightVariant.toMap().value(QStringLiteral("label")).toString();
+            if (!label.isEmpty()) {
+                labels.append(label);
+            }
+        }
+        m_supplementSummary = QStringLiteral("已解析 %1 项临时调整：%2")
+                                  .arg(labels.size())
+                                  .arg(labels.join(QStringLiteral("、")));
+    }
+
+    m_adjustment.summary = m_supplementSummary;
     emit supplementChanged();
 }

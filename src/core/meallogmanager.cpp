@@ -10,6 +10,7 @@
 #include <cmath>
 #include <QDateTime>
 #include <QHash>
+#include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSet>
@@ -1605,7 +1606,10 @@ QVariantList topItemsFromCounts(const QVariantList &items,
 
     std::sort(rankedIds.begin(), rankedIds.end(),
               [](const QPair<int, int> &left, const QPair<int, int> &right) {
-                  return left.second > right.second;
+                  if (left.second != right.second) {
+                      return left.second > right.second;
+                  }
+                  return left.first < right.first;
               });
 
     QVariantList topItems;
@@ -1624,6 +1628,94 @@ QVariantList topItemsFromCounts(const QVariantList &items,
     }
 
     return topItems;
+}
+
+int searchPriority(const QVariantMap &item,
+                   const QString &searchText,
+                   const QStringList &orderedKeys)
+{
+    if (searchText.isEmpty()) {
+        return 0;
+    }
+
+    int bestPriority = 9999;
+    for (int keyIndex = 0; keyIndex < orderedKeys.size(); ++keyIndex) {
+        const QString value =
+            item.value(orderedKeys.at(keyIndex)).toString().trimmed().toLower();
+        if (value.isEmpty()) {
+            continue;
+        }
+
+        if (value == searchText) {
+            bestPriority = std::min(bestPriority, keyIndex * 10);
+            continue;
+        }
+        if (value.startsWith(searchText)) {
+            bestPriority = std::min(bestPriority, keyIndex * 10 + 1);
+            continue;
+        }
+        if (value.contains(searchText)) {
+            bestPriority = std::min(bestPriority, keyIndex * 10 + 2);
+        }
+    }
+
+    return bestPriority;
+}
+
+void sortAvailableDishMatches(QVariantList *items, const QString &searchText)
+{
+    const QString loweredSearch = searchText.trimmed().toLower();
+    std::sort(items->begin(), items->end(),
+              [&loweredSearch](const QVariant &leftVariant,
+                               const QVariant &rightVariant) {
+                  const QVariantMap left = leftVariant.toMap();
+                  const QVariantMap right = rightVariant.toMap();
+
+                  if (!loweredSearch.isEmpty()) {
+                      const int leftPriority = searchPriority(
+                          left, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("merchantName"),
+                           QStringLiteral("category"),
+                           QStringLiteral("sleepinessRiskLevel"),
+                           QStringLiteral("notes")});
+                      const int rightPriority = searchPriority(
+                          right, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("merchantName"),
+                           QStringLiteral("category"),
+                           QStringLiteral("sleepinessRiskLevel"),
+                           QStringLiteral("notes")});
+                      if (leftPriority != rightPriority) {
+                          return leftPriority < rightPriority;
+                      }
+                  }
+
+                  const int leftRecentUse =
+                      left.value(QStringLiteral("recentUseCount")).toInt();
+                  const int rightRecentUse =
+                      right.value(QStringLiteral("recentUseCount")).toInt();
+                  if (leftRecentUse != rightRecentUse) {
+                      return leftRecentUse > rightRecentUse;
+                  }
+
+                  const QString leftName =
+                      left.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  const QString rightName =
+                      right.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  if (leftName != rightName) {
+                      return leftName < rightName;
+                  }
+
+                  const QString leftMerchant =
+                      left.value(QStringLiteral("merchantName")).toString().trimmed().toLower();
+                  const QString rightMerchant =
+                      right.value(QStringLiteral("merchantName")).toString().trimmed().toLower();
+                  if (leftMerchant != rightMerchant) {
+                      return leftMerchant < rightMerchant;
+                  }
+
+                  return left.value(QStringLiteral("id")).toInt() <
+                         right.value(QStringLiteral("id")).toInt();
+              });
 }
 
 QVariantMap buildWeightHint(const QString &key,
@@ -2351,8 +2443,35 @@ bool MealLogManager::saveMealLog(const QString &mealType,
                                  const QString &moodTag,
                                  const QString &notes)
 {
+    const auto isValidMealType = [](const QString &value) {
+        return value == QStringLiteral("breakfast") ||
+               value == QStringLiteral("lunch") ||
+               value == QStringLiteral("dinner") ||
+               value == QStringLiteral("snack");
+    };
+    const auto isValidLocationType = [](const QString &value) {
+        return value == QStringLiteral("campus") ||
+               value == QStringLiteral("dorm") ||
+               value == QStringLiteral("commute") ||
+               value == QStringLiteral("off_campus");
+    };
+    const auto isValidDiningMode = [](const QString &value) {
+        return value == QStringLiteral("dine_in") ||
+               value == QStringLiteral("takeaway") ||
+               value == QStringLiteral("delivery");
+    };
+    const auto isValidMoodLevel = [](int value) {
+        return value >= 1 && value <= 5;
+    };
+
     if (mealType.trimmed().isEmpty()) {
         m_lastError = QStringLiteral("Meal type is required.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!isValidMealType(mealType.trimmed())) {
+        m_lastError = QStringLiteral("Meal type is invalid.");
         emit stateChanged();
         return false;
     }
@@ -2369,16 +2488,54 @@ bool MealLogManager::saveMealLog(const QString &mealType,
         return false;
     }
 
+    if (weekday < 1 || weekday > 7) {
+        m_lastError = QStringLiteral("Weekday must stay within 1 to 7.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!isValidLocationType(locationType.trimmed())) {
+        m_lastError = QStringLiteral("Location type is invalid.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!isValidDiningMode(diningMode.trimmed())) {
+        m_lastError = QStringLiteral("Dining mode is invalid.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!isValidMoodLevel(preMealHungerLevel) ||
+        !isValidMoodLevel(preMealEnergyLevel)) {
+        m_lastError = QStringLiteral("Pre-meal hunger and energy must stay within 1 to 5.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (hasClassAfterMeal && minutesUntilNextClass <= 0) {
+        m_lastError = QStringLiteral("If you mark class after meal, minutes until next class must be greater than 0.");
+        emit stateChanged();
+        return false;
+    }
+
     MealLog mealLog;
     mealLog.id = m_editingMealLogId;
     mealLog.mealType = mealType.trimmed();
-    mealLog.eatenAt = QDateTime::fromString(eatenAtIso, Qt::ISODate);
-    if (!mealLog.eatenAt.isValid()) {
-        mealLog.eatenAt = QDateTime::currentDateTime();
+    const QString trimmedEatenAt = eatenAtIso.trimmed();
+    const QRegularExpression strictIsoPattern(
+        QStringLiteral("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"));
+    mealLog.eatenAt = QDateTime::fromString(trimmedEatenAt, Qt::ISODate);
+    if (!strictIsoPattern.match(trimmedEatenAt).hasMatch() ||
+        !mealLog.eatenAt.isValid() ||
+        mealLog.eatenAt.toString(Qt::ISODate) != trimmedEatenAt) {
+        m_lastError = QStringLiteral("Use a valid meal time such as 2026-04-22T12:30:00.");
+        emit stateChanged();
+        return false;
     }
     mealLog.weekday = weekday;
     mealLog.hasClassAfterMeal = hasClassAfterMeal;
-    mealLog.minutesUntilNextClass = minutesUntilNextClass;
+    mealLog.minutesUntilNextClass = hasClassAfterMeal ? minutesUntilNextClass : 0;
     mealLog.locationType = locationType.trimmed();
     mealLog.diningMode = diningMode.trimmed();
     mealLog.totalPrice = totalPrice;
@@ -2394,7 +2551,12 @@ bool MealLogManager::saveMealLog(const QString &mealType,
         MealLogDishItem item;
         item.dishId = dishMap.value(QStringLiteral("id")).toInt();
         item.portionRatio = dishMap.value(QStringLiteral("portionRatio")).toDouble();
-        item.customNotes = dishMap.value(QStringLiteral("customNotes")).toString();
+        item.customNotes = dishMap.value(QStringLiteral("customNotes")).toString().trimmed();
+        if (item.dishId <= 0 || item.portionRatio <= 0.0) {
+            m_lastError = QStringLiteral("Each selected dish must keep a valid id and positive weight.");
+            emit stateChanged();
+            return false;
+        }
         dishItems.append(item);
     }
 
@@ -2470,6 +2632,11 @@ void MealLogManager::refreshState()
         feedbackByDishId.insert(aggregate.dishId, aggregate);
     }
 
+    QHash<int, int> dishCounts;
+    for (const int dishId : recentDishIds) {
+        dishCounts[dishId] += 1;
+    }
+
     m_availableDishes.clear();
     for (const Dish &dish : dishes) {
         QVariantMap dishMap;
@@ -2485,13 +2652,10 @@ void MealLogManager::refreshState()
         dishMap.insert(QStringLiteral("sleepinessRiskLevel"),
                        dish.sleepinessRiskLevel);
         dishMap.insert(QStringLiteral("defaultDiningMode"), dish.defaultDiningMode);
+        dishMap.insert(QStringLiteral("recentUseCount"),
+                       dishCounts.value(dish.id));
         dishMap.insert(QStringLiteral("notes"), dish.notes);
         m_availableDishes.append(dishMap);
-    }
-
-    QHash<int, int> dishCounts;
-    for (const int dishId : recentDishIds) {
-        dishCounts[dishId] += 1;
     }
     m_frequentDishes =
         topItemsFromCounts(m_availableDishes, dishCounts, QStringLiteral("id"));
@@ -2528,6 +2692,8 @@ void MealLogManager::refreshState()
                                        : QStringLiteral("Dish #%1").arg(dishItem.dishId));
                 dishItemMap.insert(QStringLiteral("merchantName"),
                                    merchantNameById.value(dish.merchantId));
+                dishItemMap.insert(QStringLiteral("defaultDiningMode"),
+                                   dish.defaultDiningMode);
                 dishItemMap.insert(QStringLiteral("portionRatio"), dishItem.portionRatio);
                 dishItemMap.insert(QStringLiteral("customNotes"), dishItem.customNotes);
                 dishItemsForUi.append(dishItemMap);
@@ -3435,6 +3601,7 @@ void MealLogManager::refreshFilteredState()
             m_filteredAvailableDishes.append(dish);
         }
     }
+    sortAvailableDishMatches(&m_filteredAvailableDishes, m_dishSearch);
 }
 
 bool MealLogManager::matchesSearch(const QVariantMap &item,

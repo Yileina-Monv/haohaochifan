@@ -12,25 +12,110 @@ ApplicationWindow {
 
     color: "#f3efe6"
 
+    Dialog {
+        id: llmConfigDialog
+
+        modal: true
+        width: Math.min(window.width - 32, 360)
+        title: "LLM 配置"
+        standardButtons: Dialog.NoButton
+
+        onOpened: {
+            apiKeyField.text = appConfig.llmApiKey
+            apiUrlField.text = appConfig.llmApiUrl
+            modelField.text = appConfig.llmModel
+        }
+
+        ColumnLayout {
+            width: parent.width
+            spacing: 10
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: appConfig.llmConfigSummary
+                color: "#5d4c3e"
+            }
+
+            TextField {
+                id: apiKeyField
+                Layout.fillWidth: true
+                placeholderText: "API Key"
+                echoMode: TextInput.Password
+            }
+
+            TextField {
+                id: apiUrlField
+                Layout.fillWidth: true
+                placeholderText: appConfig.effectiveLlmApiUrl.length > 0
+                                 ? appConfig.effectiveLlmApiUrl
+                                 : "https://api.openai.com/v1/chat/completions"
+            }
+
+            TextField {
+                id: modelField
+                Layout.fillWidth: true
+                placeholderText: appConfig.effectiveLlmModel.length > 0
+                                 ? appConfig.effectiveLlmModel
+                                 : "gpt-4o-mini"
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: "留空会继续回退到环境变量；API URL 可指向 DeepSeek 兼容端点。"
+                color: "#7b6653"
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Button {
+                    text: "保存"
+                    onClicked: {
+                        appConfig.saveLlmSettings(apiKeyField.text,
+                                                  apiUrlField.text,
+                                                  modelField.text)
+                        llmConfigDialog.close()
+                    }
+                }
+
+                Button {
+                    text: "清空本地配置"
+                    onClicked: {
+                        appConfig.clearLlmSettings()
+                        llmConfigDialog.close()
+                    }
+                }
+
+                Button {
+                    text: "关闭"
+                    onClicked: llmConfigDialog.close()
+                }
+            }
+        }
+    }
+
     header: TabBar {
         id: tabBar
 
         currentIndex: swipeView.currentIndex
 
         TabButton {
-            text: "Home"
+            text: "首页"
         }
 
         TabButton {
-            text: "Schedule"
+            text: "课表"
         }
 
         TabButton {
-            text: "Food"
+            text: "食物"
         }
 
         TabButton {
-            text: "Meals"
+            text: "餐次"
         }
     }
 
@@ -61,7 +146,7 @@ ApplicationWindow {
                         spacing: 12
 
                         Label {
-                            text: "Today's Recommendation"
+                            text: "当前推荐"
                             font.pixelSize: 28
                             font.bold: true
                             color: "#2c241b"
@@ -87,7 +172,7 @@ ApplicationWindow {
                                 spacing: 10
 
                                 Label {
-                                    text: "Supplement Input"
+                                    text: "补充说明"
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "#2c241b"
@@ -95,33 +180,119 @@ ApplicationWindow {
 
                                 Label {
                                     Layout.fillWidth: true
+                                    visible: false
                                     wrapMode: Text.Wrap
                                     text: recommendationEngine.apiConfigured
                                           ? recommendationEngine.supplementStatus
-                                          : "Set MEALADVISOR_LLM_API_KEY and optionally MEALADVISOR_LLM_API_URL / MEALADVISOR_LLM_MODEL before calling the supplement parser."
+                                          : "要使用补充说明解析，请先配置 API Key，并按需补充 API URL / Model。"
                                     color: recommendationEngine.apiConfigured ? "#5d4c3e" : "#8f4b34"
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    Rectangle {
+                                        radius: 10
+                                        color: recommendationEngine.supplementState === "success"
+                                               ? "#d8ead2"
+                                               : recommendationEngine.supplementState === "parsing"
+                                                 ? "#f1e0b5"
+                                                 : recommendationEngine.supplementState === "invalid_response"
+                                                   ? "#f5d5cd"
+                                                   : recommendationEngine.supplementState === "network_error"
+                                                     ? "#f5d5cd"
+                                                     : recommendationEngine.supplementState === "unconfigured"
+                                                       ? "#eadfd3"
+                                                       : "#e6ddd2"
+                                        border.color: "#ccbca8"
+                                        border.width: 1
+                                        height: stateLabel.implicitHeight + 8
+                                        width: stateLabel.implicitWidth + 14
+
+                                        Label {
+                                            id: stateLabel
+                                            anchors.centerIn: parent
+                                            text: recommendationEngine.supplementState === "success"
+                                                  ? "解析成功"
+                                                  : recommendationEngine.supplementState === "parsing"
+                                                    ? "正在解析"
+                                                    : recommendationEngine.supplementState === "invalid_response"
+                                                      ? "格式非法"
+                                                      : recommendationEngine.supplementState === "network_error"
+                                                        ? "接口失败"
+                                                        : recommendationEngine.supplementState === "unconfigured"
+                                                          ? "未配置"
+                                                          : "待命"
+                                            color: "#4f4336"
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: recommendationEngine.supplementFallbackActive
+                                        radius: 10
+                                        color: "#f5d5cd"
+                                        border.color: "#d4a493"
+                                        border.width: 1
+                                        height: fallbackLabel.implicitHeight + 8
+                                        width: fallbackLabel.implicitWidth + 14
+
+                                        Label {
+                                            id: fallbackLabel
+                                            anchors.centerIn: parent
+                                            text: "已回退默认参数"
+                                            color: "#8f4b34"
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Button {
+                                        text: "LLM 配置"
+                                        enabled: !recommendationEngine.busy
+                                        onClicked: llmConfigDialog.open()
+                                    }
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    text: recommendationEngine.supplementStatus
+                                    color: recommendationEngine.supplementState === "success"
+                                           ? "#4e6a45"
+                                           : recommendationEngine.supplementState === "parsing"
+                                             ? "#7a5d1e"
+                                             : recommendationEngine.supplementState === "unconfigured"
+                                               ? "#8f4b34"
+                                               : recommendationEngine.supplementState === "invalid_response"
+                                                 ? "#8f4b34"
+                                                 : recommendationEngine.supplementState === "network_error"
+                                                   ? "#8f4b34"
+                                                   : "#5d4c3e"
                                 }
 
                                 TextArea {
                                     id: supplementInput
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 110
-                                    placeholderText: "Example: 我有点饿，我想吃点碳水，下午的课我不上了，我想喝可乐"
+                                    placeholderText: "例如：我有点饿，想吃点碳水，下午的课不上了，想喝可乐"
                                     wrapMode: TextEdit.Wrap
                                 }
 
-                                RowLayout {
+                                Flow {
                                     Layout.fillWidth: true
                                     spacing: 12
 
                                     Button {
-                                        text: recommendationEngine.busy ? "Parsing..." : "Parse Supplement"
-                                        enabled: recommendationEngine.apiConfigured && !recommendationEngine.busy
+                                        text: recommendationEngine.busy ? "解析中..." : "解析补充说明"
+                                        enabled: appConfig.llmApiConfigured && !recommendationEngine.busy
                                         onClicked: recommendationEngine.parseSupplement(supplementInput.text)
                                     }
 
                                     Button {
-                                        text: "Clear Supplement"
+                                        text: "清空补充说明"
                                         enabled: !recommendationEngine.busy
                                         onClicked: recommendationEngine.clearSupplement()
                                     }
@@ -162,7 +333,7 @@ ApplicationWindow {
                         }
 
                         Button {
-                            text: "Judge Recommendation"
+                            text: "生成推荐"
                             enabled: !recommendationEngine.busy
                             onClicked: recommendationEngine.runDecision()
                         }
@@ -191,7 +362,7 @@ ApplicationWindow {
                                     }
 
                                     Label {
-                                        text: "Score " + modelData.score + " | RMB " + Number(modelData.price).toFixed(0)
+                                        text: "分数 " + modelData.score + " | 价格 " + Number(modelData.price).toFixed(0) + " 元"
                                         color: "#5d4c3e"
                                     }
 
@@ -209,7 +380,7 @@ ApplicationWindow {
                                         spacing: 4
 
                                         Label {
-                                            text: "Why it fits"
+                                            text: "推荐理由"
                                             font.bold: true
                                             color: "#3f3124"
                                         }
@@ -220,7 +391,7 @@ ApplicationWindow {
                                             Label {
                                                 Layout.fillWidth: true
                                                 wrapMode: Text.Wrap
-                                                text: "• " + modelData
+                                                text: "- " + modelData
                                                 color: "#6a5b4d"
                                             }
                                         }
@@ -240,7 +411,7 @@ ApplicationWindow {
                                             spacing: 4
 
                                             Label {
-                                                text: "Warnings"
+                                                text: "提醒"
                                                 font.bold: true
                                                 color: "#8a4635"
                                             }
@@ -251,7 +422,7 @@ ApplicationWindow {
                                                 Label {
                                                     Layout.fillWidth: true
                                                     wrapMode: Text.Wrap
-                                                    text: "• " + modelData
+                                                    text: "- " + modelData
                                                     color: "#8a4635"
                                                 }
                                             }
@@ -264,7 +435,7 @@ ApplicationWindow {
                                         spacing: 6
 
                                         Label {
-                                            text: "Score breakdown"
+                                            text: "分项得分"
                                             font.bold: true
                                             color: "#3f3124"
                                         }
@@ -320,29 +491,29 @@ ApplicationWindow {
                         spacing: 8
 
                         Label {
-                            text: "Planned MVP Modules"
+                            text: "当前 MVP 模块"
                             font.pixelSize: 20
                             font.bold: true
                             color: "#213025"
                         }
 
                         Label {
-                            text: "1. Dish library"
+                            text: "1. 菜品库"
                             color: "#314238"
                         }
 
                         Label {
-                            text: "2. Meal records"
+                            text: "2. 餐次记录"
                             color: "#314238"
                         }
 
                         Label {
-                            text: "3. Schedule constraints"
+                            text: "3. 课表约束"
                             color: "#314238"
                         }
 
                         Label {
-                            text: "4. Recommendation engine"
+                            text: "4. 推荐引擎"
                             color: "#314238"
                         }
                     }
@@ -360,7 +531,7 @@ ApplicationWindow {
                         spacing: 8
 
                         Label {
-                            text: "Live App State"
+                            text: "当前应用状态"
                             font.pixelSize: 20
                             font.bold: true
                             color: "#3b2c1e"
@@ -382,12 +553,12 @@ ApplicationWindow {
                         }
 
                         Label {
-                            text: "Active dishes: " + appState.activeDishCount
+                            text: "启用菜品：" + appState.activeDishCount
                             color: "#5b4938"
                         }
 
                         Label {
-                            text: "Meal logs: " + appState.mealLogCount
+                            text: "餐次记录：" + appState.mealLogCount
                             color: "#5b4938"
                         }
 

@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 
+#include "core/appconfig.h"
 #include "core/appstate.h"
 #include "core/foodmanager.h"
 #include "core/meallogmanager.h"
@@ -12,6 +13,8 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("MealAdvisor"));
+    QCoreApplication::setApplicationName(QStringLiteral("MealAdvisor"));
 
     QQmlApplicationEngine engine;
     DatabaseManager databaseManager;
@@ -25,8 +28,10 @@ int main(int argc, char *argv[])
     FoodManager foodManager(databaseManager);
     MealLogManager mealLogManager(databaseManager);
     ScheduleManager scheduleManager(databaseManager);
-    RecommendationEngine recommendationEngine(databaseManager);
+    AppSettings appSettings;
+    RecommendationEngine recommendationEngine(databaseManager, &appSettings);
 
+    engine.rootContext()->setContextProperty("appConfig", &appSettings);
     engine.rootContext()->setContextProperty("appState", &appState);
     engine.rootContext()->setContextProperty("databaseManager", &databaseManager);
     engine.rootContext()->setContextProperty("foodManager", &foodManager);

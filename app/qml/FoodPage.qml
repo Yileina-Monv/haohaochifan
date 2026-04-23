@@ -18,6 +18,20 @@ ScrollView {
         return dishMerchantBox.count > 0 ? 0 : -1
     }
 
+    function dishMerchantFilterOptions() {
+        return [{ id: 0, name: "全部商家" }].concat(foodManager.merchants)
+    }
+
+    function dishMerchantFilterIndexForId(merchantId) {
+        const options = dishMerchantFilterOptions()
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].id === merchantId) {
+                return i
+            }
+        }
+        return 0
+    }
+
     function resetMerchantForm() {
         editingMerchantId = 0
         merchantNameField.text = ""
@@ -213,7 +227,7 @@ ScrollView {
                 spacing: 10
 
                 Label {
-                    text: "Merchant & Dish Management"
+                    text: "商家与菜品管理"
                     font.pixelSize: 28
                     font.bold: true
                     color: "#2c241b"
@@ -222,16 +236,16 @@ ScrollView {
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    text: "Search, edit, archive, and reuse existing food data. Active dishes stay searchable and recent meal history drives the quick lists."
+                    text: "集中维护商家和菜品。优先保证搜索、编辑、归档和复用顺手，不需要再手改数据库。"
                     color: "#5d4c3e"
                 }
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
                     spacing: 12
 
                     Button {
-                        text: "Reload"
+                        text: "刷新"
                         onClicked: {
                             foodManager.reload()
                             if (editingMerchantId > 0) {
@@ -244,12 +258,12 @@ ScrollView {
                     }
 
                     Label {
-                        text: "Merchants: " + foodManager.merchantCount
+                        text: "商家数：" + foodManager.merchantCount
                         color: "#6d5846"
                     }
 
                     Label {
-                        text: "Dishes: " + foodManager.dishCount
+                        text: "菜品数：" + foodManager.dishCount
                         color: "#6d5846"
                     }
                 }
@@ -279,7 +293,7 @@ ScrollView {
                     Layout.fillWidth: true
 
                     Label {
-                        text: editingMerchantId > 0 ? "Edit Merchant" : "Add Merchant"
+                        text: editingMerchantId > 0 ? "编辑商家" : "新增商家"
                         font.pixelSize: 20
                         font.bold: true
                         color: "#223126"
@@ -287,7 +301,7 @@ ScrollView {
 
                     Button {
                         visible: editingMerchantId > 0
-                        text: "Cancel"
+                        text: "取消"
                         onClicked: resetMerchantForm()
                     }
                 }
@@ -301,13 +315,13 @@ ScrollView {
                     TextField {
                         id: merchantNameField
                         Layout.fillWidth: true
-                        placeholderText: "Merchant name"
+                        placeholderText: "商家名"
                     }
 
                     TextField {
                         id: merchantAreaField
                         Layout.fillWidth: true
-                        placeholderText: "Campus area / building"
+                        placeholderText: "校区区域 / 楼栋"
                     }
 
                     ComboBox {
@@ -319,21 +333,21 @@ ScrollView {
                     TextField {
                         id: merchantDistanceField
                         Layout.fillWidth: true
-                        placeholderText: "Distance minutes"
+                        placeholderText: "步行分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: merchantQueueField
                         Layout.fillWidth: true
-                        placeholderText: "Queue minutes"
+                        placeholderText: "排队分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: merchantDeliveryField
                         Layout.fillWidth: true
-                        placeholderText: "Delivery ETA minutes"
+                        placeholderText: "外卖预计分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
                 }
@@ -344,17 +358,17 @@ ScrollView {
 
                     CheckBox {
                         id: merchantDineInCheck
-                        text: "Dine-in"
+                        text: "堂食"
                     }
 
                     CheckBox {
                         id: merchantTakeawayCheck
-                        text: "Takeaway"
+                        text: "打包"
                     }
 
                     CheckBox {
                         id: merchantDeliveryCheck
-                        text: "Delivery"
+                        text: "外卖"
                     }
                 }
 
@@ -362,12 +376,12 @@ ScrollView {
                     id: merchantNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-                    placeholderText: "Availability notes"
+                    placeholderText: "可用性备注，例如档口活动、容易售罄、时段限制"
                     wrapMode: TextEdit.Wrap
                 }
 
                 Button {
-                    text: editingMerchantId > 0 ? "Update Merchant" : "Save Merchant"
+                    text: editingMerchantId > 0 ? "更新商家" : "保存商家"
                     onClicked: saveMerchant()
                 }
             }
@@ -388,7 +402,7 @@ ScrollView {
                     Layout.fillWidth: true
 
                     Label {
-                        text: editingDishId > 0 ? "Edit Dish" : "Add Dish"
+                        text: editingDishId > 0 ? "编辑菜品" : "新增菜品"
                         font.pixelSize: 20
                         font.bold: true
                         color: "#36391f"
@@ -396,7 +410,7 @@ ScrollView {
 
                     Button {
                         visible: editingDishId > 0
-                        text: "Cancel"
+                        text: "取消"
                         onClicked: resetDishForm()
                     }
                 }
@@ -410,7 +424,7 @@ ScrollView {
                         model: foodManager.frequentMerchants
 
                         Button {
-                            text: "Use " + modelData.name
+                            text: "常用商家：" + modelData.name
                             onClicked: dishMerchantBox.currentIndex = merchantIndexForId(modelData.id)
                         }
                     }
@@ -425,7 +439,7 @@ ScrollView {
                     TextField {
                         id: dishNameField
                         Layout.fillWidth: true
-                        placeholderText: "Dish name"
+                        placeholderText: "菜品名"
                     }
 
                     ComboBox {
@@ -439,13 +453,14 @@ ScrollView {
                     TextField {
                         id: dishCategoryField
                         Layout.fillWidth: true
-                        placeholderText: "Category"
+                        placeholderText: "分类"
                     }
 
                     TextField {
                         id: dishPriceField
                         Layout.fillWidth: true
-                        placeholderText: "Price"
+                        placeholderText: "价格"
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
 
                     ComboBox {
@@ -457,21 +472,22 @@ ScrollView {
                     TextField {
                         id: dishEatTimeField
                         Layout.fillWidth: true
-                        placeholderText: "Eat time minutes"
+                        placeholderText: "用餐分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: dishEffortField
                         Layout.fillWidth: true
-                        placeholderText: "Acquire effort 1-3"
+                        placeholderText: "获取成本 1-3"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: dishImpactField
                         Layout.fillWidth: true
-                        placeholderText: "Meal impact weight"
+                        placeholderText: "餐次影响权重"
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                 }
 
@@ -504,12 +520,12 @@ ScrollView {
 
                     CheckBox {
                         id: comboCheck
-                        text: "Combo dish"
+                        text: "套餐 / 组合餐"
                     }
 
                     CheckBox {
                         id: beverageCheck
-                        text: "Beverage / snack"
+                        text: "饮料 / 零食"
                     }
                 }
 
@@ -517,19 +533,19 @@ ScrollView {
                     id: dishNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 90
-                    placeholderText: "Notes"
+                    placeholderText: "备注，例如口味、气味、适合场景"
                     wrapMode: TextEdit.Wrap
                 }
 
                 Button {
-                    text: editingDishId > 0 ? "Update Dish" : "Save Dish"
+                    text: editingDishId > 0 ? "更新菜品" : "保存菜品"
                     enabled: foodManager.merchantCount > 0
                     onClicked: saveDish()
                 }
 
                 Label {
                     visible: foodManager.merchantCount === 0
-                    text: "Add at least one merchant before creating dishes."
+                    text: "请先至少添加一个商家，再创建菜品。"
                     color: "#8a5a34"
                 }
             }
@@ -547,7 +563,7 @@ ScrollView {
                 spacing: 10
 
                 Label {
-                    text: "Merchants"
+                    text: "商家列表"
                     font.pixelSize: 20
                     font.bold: true
                     color: "#31241a"
@@ -555,7 +571,7 @@ ScrollView {
 
                 TextField {
                     Layout.fillWidth: true
-                    placeholderText: "Search merchants"
+                    placeholderText: "搜索商家、区域或备注"
                     text: foodManager.merchantSearch
                     onTextChanged: foodManager.setMerchantSearch(text)
                 }
@@ -586,12 +602,12 @@ ScrollView {
                                 }
 
                                 Button {
-                                    text: "Edit"
+                                    text: "编辑"
                                     onClicked: loadMerchantForEdit(modelData)
                                 }
 
                                 Button {
-                                    text: "Delete"
+                                    text: "删除"
                                     onClicked: {
                                         if (foodManager.deleteMerchant(modelData.id) && editingMerchantId === modelData.id) {
                                             resetMerchantForm()
@@ -601,7 +617,7 @@ ScrollView {
                             }
 
                             Label {
-                                text: "Distance " + modelData.distanceMinutes + " min, queue " + modelData.queueTimeMinutes + " min, delivery " + modelData.deliveryEtaMinutes + " min"
+                                text: "步行 " + modelData.distanceMinutes + " 分钟，排队 " + modelData.queueTimeMinutes + " 分钟，外卖约 " + modelData.deliveryEtaMinutes + " 分钟"
                                 color: "#5f4d3d"
                             }
 
@@ -624,7 +640,7 @@ ScrollView {
 
                 Label {
                     visible: foodManager.filteredMerchants.length === 0
-                    text: "No merchants match the current search."
+                    text: "当前搜索下没有命中的商家。"
                     color: "#7b6756"
                 }
             }
@@ -642,17 +658,52 @@ ScrollView {
                 spacing: 10
 
                 Label {
-                    text: "Dishes"
+                    text: "菜品列表"
                     font.pixelSize: 20
                     font.bold: true
                     color: "#243041"
                 }
 
-                TextField {
+                GridLayout {
                     Layout.fillWidth: true
-                    placeholderText: "Search dishes"
-                    text: foodManager.dishSearch
-                    onTextChanged: foodManager.setDishSearch(text)
+                    columns: 2
+                    columnSpacing: 12
+                    rowSpacing: 10
+
+                    TextField {
+                        Layout.fillWidth: true
+                        placeholderText: "搜索菜品、商家、风险标签或用餐方式"
+                        text: foodManager.dishSearch
+                        onTextChanged: foodManager.setDishSearch(text)
+                    }
+
+                    ComboBox {
+                        id: dishMerchantFilterBox
+                        Layout.fillWidth: true
+                        model: root.dishMerchantFilterOptions()
+                        textRole: "name"
+                        valueRole: "id"
+                        currentIndex: root.dishMerchantFilterIndexForId(foodManager.dishMerchantFilterId)
+                        onActivated: foodManager.setDishMerchantFilterId(currentValue)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: "当前命中 " + foodManager.filteredDishes.length + " / " + foodManager.dishCount
+                              + "。搜索会优先把更贴近关键词、且最近更常用的菜排在前面。"
+                        color: "#5b6d84"
+                    }
+
+                    Button {
+                        text: "清空筛选"
+                        visible: foodManager.dishMerchantFilterId > 0
+                        onClicked: foodManager.setDishMerchantFilterId(0)
+                    }
                 }
 
                 Flow {
@@ -697,12 +748,12 @@ ScrollView {
                                 }
 
                                 Button {
-                                    text: "Edit"
+                                    text: "编辑"
                                     onClicked: loadDishForEdit(modelData)
                                 }
 
                                 Button {
-                                    text: "Archive"
+                                    text: "归档"
                                     onClicked: {
                                         if (foodManager.deleteDish(modelData.id) && editingDishId === modelData.id) {
                                             resetDishForm()
@@ -712,17 +763,17 @@ ScrollView {
                             }
 
                             Label {
-                                text: "Category " + modelData.category + " | price " + modelData.price + " | dining " + modelData.defaultDiningMode
+                                text: "分类 " + modelData.category + " | 价格 " + modelData.price + " | 方式 " + modelData.defaultDiningMode
                                 color: "#465a74"
                             }
 
                             Label {
-                                text: "C/F/P/V/Fiber: " + modelData.carbLevel + " / " + modelData.fatLevel + " / " + modelData.proteinLevel + " / " + modelData.vitaminLevel + " / " + modelData.fiberLevel
+                                text: "碳/脂/蛋白/维生素/纤维：" + modelData.carbLevel + " / " + modelData.fatLevel + " / " + modelData.proteinLevel + " / " + modelData.vitaminLevel + " / " + modelData.fiberLevel
                                 color: "#465a74"
                             }
 
                             Label {
-                                text: "Satiety " + modelData.satietyLevel + ", burden " + modelData.digestiveBurdenLevel + ", sleepiness " + modelData.sleepinessRiskLevel + ", odor " + modelData.odorLevel + ", impact " + modelData.mealImpactWeight
+                                text: "饱腹 " + modelData.satietyLevel + "，负担 " + modelData.digestiveBurdenLevel + "，犯困 " + modelData.sleepinessRiskLevel + "，气味 " + modelData.odorLevel + "，权重 " + modelData.mealImpactWeight
                                 color: "#465a74"
                             }
 
@@ -739,7 +790,7 @@ ScrollView {
 
                 Label {
                     visible: foodManager.filteredDishes.length === 0
-                    text: "No dishes match the current search."
+                    text: "当前搜索下没有命中的菜品。"
                     color: "#6b7a8f"
                 }
             }

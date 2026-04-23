@@ -14,27 +14,27 @@ Project requirements from `CMakeLists.txt`:
 
 Observed toolchain on this machine:
 
-- Git: `2.45.1.windows.1`
+- Git: `2.54.0.windows.1`
 - CMake: `3.30.5`
 - Ninja: `1.12.1`
 - MinGW g++: `13.1.0`
 - JDK: `Temurin 21.0.10+7`
 - ADB: `37.0.0`
+- Android command-line tools: `14742923`
 - Qt desktop kit: `C:\Qt\6.10.3\mingw_64`
 - Qt Android kit: `C:\Qt\6.10.3\android_arm64_v8a`
 - Qt tools root: `C:\Qt\Tools`
-- Android SDK: `C:\Users\Administrator\AppData\Local\Android\Sdk`
-- Android NDK: `C:\Users\Administrator\AppData\Local\Android\Sdk\ndk\27.2.12479018`
+- Android SDK: `C:\Users\35378\AppData\Local\Android\Sdk`
+- Android NDK: `C:\Users\35378\AppData\Local\Android\Sdk\ndk\27.2.12479018`
 - Android build-tools: `36.0.0`
-- Android platform currently installed: `android-36`
+- Android platforms currently installed: `android-35`, `android-36`
 
 Important note:
 
 - The cached Android build configuration was created with
   `ANDROID_PLATFORM=android-35`.
-- The current SDK directory on this machine only shows `android-36`.
-- On a new machine, either install `android-35` as well, or reconfigure the
-  Android build to target `android-36`.
+- This machine now has both `android-35` and `android-36` installed, so the
+  existing Android configure line can be reused as-is.
 
 ## What This Project Does Not Currently Need
 
@@ -77,30 +77,23 @@ Ninja:              C:\Qt\Tools\Ninja\ninja.exe
 MinGW g++:          C:\Qt\Tools\mingw1310_64\bin\g++.exe
 qmake:              C:\Qt\6.10.3\mingw_64\bin\qmake.exe
 windeployqt:        C:\Qt\6.10.3\mingw_64\bin\windeployqt.exe
-Android SDK:        C:\Users\Administrator\AppData\Local\Android\Sdk
-Android NDK:        C:\Users\Administrator\AppData\Local\Android\Sdk\ndk\27.2.12479018
+Android SDK tools:  C:\Users\35378\AppData\Local\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat
+Android SDK:        C:\Users\35378\AppData\Local\Android\Sdk
+Android NDK:        C:\Users\35378\AppData\Local\Android\Sdk\ndk\27.2.12479018
 JDK:                C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot
 ```
 
 ## Environment Variables
 
-This machine is not relying on persistent system env vars for Qt or Android.
-The following values were empty at process, user, and machine scope:
-
-- `JAVA_HOME`
-- `ANDROID_SDK_ROOT`
-- `ANDROID_HOME`
-- `ANDROID_NDK_ROOT`
-- `Qt6_DIR`
-- `CMAKE_PREFIX_PATH`
-- `QTDIR`
-
-That said, setting a few explicit env vars on a new machine is still a good
-idea because it makes CLI builds reproducible outside Qt Creator.
+This machine now uses persistent user-level env vars for Qt and Android so
+CLI builds work outside Qt Creator as well.
 
 Recommended user-level env vars:
 
 ```powershell
+[Environment]::SetEnvironmentVariable('Qt6_DIR', 'C:\Qt\6.10.3\mingw_64\lib\cmake\Qt6', 'User')
+[Environment]::SetEnvironmentVariable('CMAKE_PREFIX_PATH', 'C:\Qt\6.10.3\mingw_64', 'User')
+[Environment]::SetEnvironmentVariable('QTDIR', 'C:\Qt\6.10.3\mingw_64', 'User')
 [Environment]::SetEnvironmentVariable('JAVA_HOME', 'C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot', 'User')
 [Environment]::SetEnvironmentVariable('ANDROID_SDK_ROOT', 'C:\Users\<YourUser>\AppData\Local\Android\Sdk', 'User')
 [Environment]::SetEnvironmentVariable('ANDROID_HOME', 'C:\Users\<YourUser>\AppData\Local\Android\Sdk', 'User')
@@ -114,6 +107,8 @@ C:\Qt\Tools\CMake_64\bin
 C:\Qt\Tools\Ninja
 C:\Qt\Tools\mingw1310_64\bin
 C:\Qt\6.10.3\mingw_64\bin
+C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot\bin
+C:\Users\<YourUser>\AppData\Local\Android\Sdk\cmdline-tools\latest\bin
 C:\Users\<YourUser>\AppData\Local\Android\Sdk\platform-tools
 ```
 
@@ -174,6 +169,7 @@ Example install command:
 & 'C:\Users\<YourUser>\AppData\Local\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat' `
   'platform-tools' `
   'platforms;android-35' `
+  'platforms;android-36' `
   'build-tools;36.0.0' `
   'ndk;27.2.12479018'
 ```
@@ -207,3 +203,6 @@ Expected key outcomes:
   of forcing the old path layout.
 - If you prefer Qt Creator, recreate one desktop kit and one Android kit that
   point to the same versions listed above.
+- Desktop build has been re-verified with Qt `6.10.3`.
+- Android CMake configure has been re-verified with Qt `6.10.3`,
+  `android-35`, and NDK `27.2.12479018`.

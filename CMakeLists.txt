@@ -5,7 +5,7 @@ project(MealAdvisor VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Qml Sql Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Qml Sql Network)
 
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
@@ -44,6 +44,40 @@ qt_add_executable(MealAdvisor
     src/recommendation/recommendationengine.h
 )
 
+if (NOT ANDROID)
+    qt_add_executable(MealAdvisorValidation
+        src/core/appconfig.cpp
+        src/core/appconfig.h
+        src/core/foodmanager.cpp
+        src/core/foodmanager.h
+        src/core/meallogmanager.cpp
+        src/core/meallogmanager.h
+        src/core/domainmodels.cpp
+        src/core/domainmodels.h
+        src/core/schedulemanager.cpp
+        src/core/schedulemanager.h
+        src/data/databasemanager.cpp
+        src/data/databasemanager.h
+        src/data/dishrepository.cpp
+        src/data/dishrepository.h
+        src/data/mealfeedbackrepository.cpp
+        src/data/mealfeedbackrepository.h
+        src/data/merchantrepository.cpp
+        src/data/merchantrepository.h
+        src/data/meallogrepository.cpp
+        src/data/meallogrepository.h
+        src/data/planningrepository.cpp
+        src/data/planningrepository.h
+        src/data/recommendationrecordrepository.cpp
+        src/data/recommendationrecordrepository.h
+        src/data/schedulerepository.cpp
+        src/data/schedulerepository.h
+        src/recommendation/recommendationengine.cpp
+        src/recommendation/recommendationengine.h
+        tools/validation/main.cpp
+    )
+endif()
+
 qt_add_qml_module(MealAdvisor
     URI MealAdvisor
     VERSION 1.0
@@ -61,6 +95,15 @@ target_link_libraries(MealAdvisor
         Qt6::Sql
         Qt6::Network
 )
+
+if (NOT ANDROID)
+    target_link_libraries(MealAdvisorValidation
+        PRIVATE
+            Qt6::Core
+            Qt6::Sql
+            Qt6::Network
+    )
+endif()
 
 if (WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
@@ -90,6 +133,14 @@ qt_add_resources(MealAdvisor "mealadvisor_resources"
         data/schema.sql
 )
 
+if (NOT ANDROID)
+    qt_add_resources(MealAdvisorValidation "mealadvisor_validation_resources"
+        PREFIX "/"
+        FILES
+            data/schema.sql
+    )
+endif()
+
 set_target_properties(MealAdvisor PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
@@ -99,3 +150,11 @@ install(TARGETS MealAdvisor
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
+if (NOT ANDROID)
+    install(TARGETS MealAdvisorValidation
+        BUNDLE DESTINATION .
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()

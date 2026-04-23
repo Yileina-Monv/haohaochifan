@@ -16,6 +16,7 @@ class FoodManager : public QObject
     Q_PROPERTY(QVariantList frequentDishes READ frequentDishes NOTIFY foodChanged)
     Q_PROPERTY(QString merchantSearch READ merchantSearch NOTIFY foodChanged)
     Q_PROPERTY(QString dishSearch READ dishSearch NOTIFY foodChanged)
+    Q_PROPERTY(int dishMerchantFilterId READ dishMerchantFilterId NOTIFY foodChanged)
     Q_PROPERTY(int merchantCount READ merchantCount NOTIFY foodChanged)
     Q_PROPERTY(int dishCount READ dishCount NOTIFY foodChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY foodChanged)
@@ -32,6 +33,7 @@ public:
     QVariantList frequentDishes() const;
     QString merchantSearch() const;
     QString dishSearch() const;
+    int dishMerchantFilterId() const;
     int merchantCount() const;
     int dishCount() const;
     QString lastError() const;
@@ -39,6 +41,7 @@ public:
     Q_INVOKABLE void reload();
     Q_INVOKABLE void setMerchantSearch(const QString &searchText);
     Q_INVOKABLE void setDishSearch(const QString &searchText);
+    Q_INVOKABLE void setDishMerchantFilterId(int merchantId);
     Q_INVOKABLE bool addMerchant(const QString &name,
                                  const QString &campusArea,
                                  const QString &priceLevel,
@@ -124,6 +127,7 @@ private:
     QVariantList m_frequentDishes;
     QString m_merchantSearch;
     QString m_dishSearch;
+    int m_dishMerchantFilterId = 0;
     int m_merchantCount = 0;
     int m_dishCount = 0;
     QString m_lastError;

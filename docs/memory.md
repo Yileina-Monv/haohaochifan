@@ -1,12 +1,15 @@
-# Project Memory
+﻿# Project Memory
 
-Last updated: `2026-04-20`
+Last updated: `2026-04-23`
 
 ## Update Rule
 
 This file is the persistent working memory for the project.
 
 Every time code is modified, update this file before ending the task.
+
+Every time a task changes code or project documentation, also leave the next
+concrete new-window handoff prompt in `docs/next-task-prompt.md`.
 
 At minimum, keep these sections current:
 
@@ -21,10 +24,14 @@ If the current task changes project direction or major behavior, also update
 ## Current Snapshot
 
 - Project: `MealAdvisor`
-- Root path: `D:\Codex\2026-04-18-qt-c-app`
+- Root path: `D:\Codex\haohaochifan`
 - Stack: `Qt Quick/QML + C++ + SQLite`
-- Desktop build: compiling successfully in `build/desktop-debug`
-- Estimated overall progress: about `81%` to `85%`
+- Desktop build: compiling successfully in `build/desktop-debug-6103`
+- Qt and Android environment are now aligned on this machine:
+  Qt `6.10.3` desktop + Android kits, JDK `21`, Android SDK command-line
+  tools, build-tools `36.0.0`, platforms `android-35` / `android-36`,
+  and NDK `27.2.12479018`
+- Estimated overall progress: about `87%` to `90%`
 - Main pages currently present: `Home`, `Schedule`, `Food`, `Meals`
 - Data layer already includes repositories for planning, schedule, merchants,
   dishes, and meal logs
@@ -34,6 +41,30 @@ If the current task changes project direction or major behavior, also update
   on the previous meal
 - Home page now includes a natural-language supplement input box that can call
   an OpenAI-compatible API and convert text into temporary scoring weights
+- Home page supplement parsing now has a minimum in-app LLM config path for
+  API key / URL / model, while still falling back to
+  `MEALADVISOR_LLM_*` and `OPENAI_API_KEY`
+- Stage 6 supplement parsing now follows the docs-backed
+  `supplement_parser_v1` contract:
+  strict top-level JSON, fixed 13-field `result`, strict local validation, and
+  neutral fallback on invalid output
+- Stage 6 supplement parsing has now also been live-verified against the
+  DeepSeek chat completions endpoint with real Chinese supplement samples, and
+  the request path now explicitly sends
+  `response_format = { "type": "json_object" }`
+- Stage 6 final local mapping pass is now complete: `budgetFlexIntent = 1.1`
+  has a visible downstream effect for relaxed high-budget dinner, while
+  `colaIntent` can act as a weak drink-intent proxy but still depends on actual
+  beverage / cola candidates existing in local dish data
+- Stage 1-6 closeout has now been rechecked on `2026-04-23`; no code blocker
+  was found for entering Stage 7 preflight
+- Stage 7 preflight has started with a first minimal frontend pass:
+  Home / Food visible mojibake was repaired, Schedule's main English copy was
+  localized, and a few dense action rows now wrap instead of squeezing on
+  phone-width screens
+- Supplement parser UI state is now explicit enough to distinguish:
+  unconfigured, parsing, success, invalid response, network failure, and
+  fallback-to-default
 - A dedicated metrics reference document now exists at
   `docs/recommendation-metrics-table.md`
 - Recommendation Engine V2 Core has now been implemented inside the existing
@@ -112,6 +143,35 @@ If the current task changes project direction or major behavior, also update
 - Meals-page feedback detail now also exposes a first-look scan anchor:
   `firstScanStepTitle`, `firstScanStepBody`, and `remainingScanStepCount`
   let the detail panel highlight the first action before the longer text
+- Meals-page daily logging is now noticeably faster without changing schema:
+  recent real meals can be reused as quick templates, the main meal form uses
+  more Chinese-visible labels, dish search can add the first match on Enter,
+  and the first added dish can automatically carry its default dining mode
+- The copy-dishes-only quick-reuse path now also keeps dining-mode carry-over
+  aligned with the faster manual-add path:
+  template dish items expose `defaultDiningMode`, and dish-only reuse falls
+  back to the source meal's dining mode when needed
+- Food-page dish maintenance is now easier in-place:
+  dish search can now be filtered by merchant and also match more operational
+  fields such as burden, sleepiness, flavor, odor, and dining mode
+- Meals / Food guardrails are now tighter without touching schema:
+  meal save no longer silently rewrites invalid timestamps to `now`,
+  `classAfterMeal` and `minutesUntilNextClass` are validated together,
+  merchant/dish enum fields are normalized and checked, and obviously invalid
+  numeric ranges are rejected earlier in the manager layer
+- Search and picker ordering are now more intentional on the existing local
+  data:
+  the Meals dish picker and Food dish search now sort by keyword closeness
+  first and recent-use frequency second, while frequent-item tie cases now use
+  deterministic tie-breakers instead of depending on repository order
+- Home / Food visible copy is now more consistent with the rest of the app:
+  the main tab labels and Home action labels are Chinese-visible, and Food
+  maintenance copy now better explains search/filter behavior instead of
+  looking half-admin / half-debug
+- Recommendation candidate ordering is now more stable under equal-score ties:
+  `RecommendationEngine` keeps the existing score pipeline but now breaks ties
+  by cheaper dish first, then deterministic dish / merchant naming instead of
+  leaving equal-score ordering to container iteration
 - Supporting sample ordering now uses stronger tie-breakers:
   compare richness, score-gap availability, representative feedback density,
   and top supporting-meal quality now help keep dish/meal ordering stable
@@ -133,9 +193,10 @@ If the current task changes project direction or major behavior, also update
   - Stage 2 `Input Capability`: substantially done
   - Stage 3 `Recommendation Engine / V2 Core`: near complete
   - Stage 4 `Feedback Loop`: well underway
-  - Stage 5 `Management Completion`: not started
-  - Stage 6 `LLM Enhancement`: partially started
-  - Stage 7 `Android Polish/Release`: not started
+  - Stage 5 `Management Completion`: well underway
+  - Stage 6 `LLM Enhancement`: minimum viable supplement parser is closed
+    enough to hand to Stage 7 preflight
+  - Stage 7 `Android Polish/Release`: preflight started
 
 ## Roadmap Framework
 
@@ -158,7 +219,7 @@ Scope:
 
 ### Stage 2: Input Capability
 
-Status: `Substantially done`
+Status: `Near complete`
 
 Already done:
 
@@ -171,7 +232,8 @@ Already done:
 
 Still missing:
 
-- a final pass on even faster daily-entry UX
+- longer-session validation that the latest quick-entry defaults and picker
+  ordering really hold up in repeated use
 - optional extras such as more powerful search, favorites, and bulk actions
 
 Practical target:
@@ -226,7 +288,7 @@ Completion signal:
 
 ### Stage 5: Management Completion
 
-Status: `Partially done`
+Status: `Substantially done`
 
 Scope:
 
@@ -240,16 +302,42 @@ Completion signal:
 
 ### Stage 6: LLM Enhancement Layer
 
-Status: `Partially started`
+Status: `Minimum viable supplement parser usable`
 
 Already done:
 
-- there is already an OpenAI-compatible supplement parser for natural-language
-  temporary preference weights
+- supplement parsing now uses the docs-backed `supplement_parser_v1` contract
+- parser requests now use OpenAI Chat Completions style `system` + `user`
+  messages with `temperature = 0`
+- parser requests now also send
+  `response_format = { "type": "json_object" }` for providers that support
+  OpenAI-compatible JSON mode
+- parser responses are locally validated for:
+  - strict JSON
+  - `version = supplement_parser_v1`
+  - exact 13-field `result`
+  - allowed value sets / enums / nap-minute set
+- invalid responses now fall back to a neutral default object instead of being
+  applied loosely
+- Home now includes a minimum in-app config path for API key / URL / model
+  while preserving env var fallback
+- validation now covers:
+  unconfigured, malformed response, invalid structure, network failure,
+  timeout, and valid structured result
+- one live DeepSeek verification pass has now been completed for:
+  - strong class constraint
+  - weak preference
+  - nap before class
+  - stay awake
+  - budget relaxed
+  - cola preference
 
 Still missing for full completion:
 
-- final provider decision such as Deepseek if desired
+- a final decision on whether the current DeepSeek-compatible path is the
+  long-term default provider
+- one fully manual click-driven desktop UI live session if later needed for
+  extra confidence beyond the current smoke + mock-server + real-provider pass
 - natural-language dish name to structured dish tags
 - natural-language feedback to structured weight changes
 - optional secondary explanation or reranking support
@@ -260,7 +348,7 @@ Important rule:
 
 ### Stage 7: Android Polish And Release
 
-Status: `Not started`
+Status: `Preflight started`
 
 Scope:
 
@@ -286,9 +374,9 @@ Completion signal:
 
 ## Recommended Delivery Order
 
-1. Deepen feedback analytics with drill-down detail and actionable weight hints
-2. Add a frontend-adjustable weight UI and API settings UI
-3. Finish management-completion polish and faster daily-entry UX
+1. Finish management-completion polish and validate the faster daily-entry UX
+2. Re-run the Android build verification pass after the latest portability fix
+3. Add a frontend-adjustable weight UI and API settings UI
 4. Clean up encoding and UX rough edges
 5. Expand LLM enhancement
 6. Finish Android packaging and release polish
@@ -571,24 +659,300 @@ Completion signal:
   its current UTF-8 file contents are readable and structurally useful, so it
   should no longer be treated as broadly encoding-damaged by default
 
+### `2026-04-21`
+
+- Aligned the local development environment to the documented Qt / Android
+  stack:
+  - installed Qt `6.10.3` desktop and Android kits alongside the existing
+    tools
+  - installed Git `2.54.0.windows.1`
+  - installed Eclipse Temurin JDK `21.0.10.7-hotspot`
+  - installed Android SDK command-line tools, `platform-tools`,
+    `build-tools;36.0.0`, `platforms;android-35`, `platforms;android-36`,
+    and `ndk;27.2.12479018`
+  - updated persistent user env vars:
+    `Qt6_DIR`, `CMAKE_PREFIX_PATH`, `QTDIR`, `JAVA_HOME`,
+    `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_NDK_ROOT`,
+    plus PATH entries for Qt / Java / Android CLI tools
+- Re-verified desktop compilation with Qt `6.10.3` in
+  `build/desktop-debug-6103`
+- Re-verified Android CMake configure for `arm64-v8a` in
+  `build/android-arm64-debug-6103`
+- Found a cross-platform compile issue during Android Clang build in
+  `src/recommendation/recommendationengine.cpp`:
+  `QNetworkRequest request(QUrl(...))` was parsed as a function declaration on
+  Android/Clang
+- Fixed the supplement-parser request construction by switching to brace
+  initialization so the same code now compiles consistently across desktop and
+  Android toolchains
+- Standardized the new-window continuation workflow:
+  - `docs/resume-prompt.md` is now the stable generic template
+  - `docs/next-task-prompt.md` is now the concrete next-window handoff prompt
+    that should be refreshed after each completed task
+  - the prompt workflow now explicitly requires updating `docs/memory.md`
+    before finishing and writing the next concrete prompt for the following
+    window
+- Switched this window back to the Stage 5 priority explicitly requested by
+  the user instead of following the older Android-first handoff order from the
+  stale prompt docs.
+- Completed a focused high-yield Meals quick-entry pass inside the existing
+  `MealLogPage` without changing schema, persistence, or feedback behavior:
+  - added a top-of-page `鏈€杩戦娆″揩鎹峰鐢╜ surface that can reuse a recent real meal
+    as a template or copy only its dish set
+  - added the same `澶嶇敤杩欓` / `鍙姞鑿渀 actions onto recent meal cards for shorter
+    round-trips while keeping edit/delete intact
+  - changed the meal form to use more Chinese-visible labels for meal type,
+    weekday, location, and dining mode while still persisting the same
+    internal enum strings
+  - dish search can now add the first filtered match directly on Enter, clears
+    back to the full list after a successful add, and leaves the optional
+    portion-weight field blank so the default dish weight can be reused
+    without repetitive manual edits
+  - when the first dish is added, its default dining mode now carries into the
+    meal form automatically to remove a common repeated click
+- Added a small but valuable Food maintenance improvement inside the existing
+  `FoodManager` and `FoodPage`:
+  - dishes can now be filtered by merchant in addition to free-text search
+  - dish search now also matches burden, sleepiness, flavor, odor, and dining
+    mode fields so everyday maintenance queries need less scrolling
+- Re-verified desktop compile in `build/desktop-debug-6103` after the Stage 5
+  quick-entry / filtering pass
+- Re-verified that `MealAdvisor.exe` starts successfully after the latest
+  Meals / Food UX changes by launching it locally and stopping it after a
+  short smoke-check window
+
+### `2026-04-22`
+
+- Validated the current Stage 5 quick-entry work against the actual code path
+  instead of only the latest handoff notes:
+  - recent-meal template reuse is present in `MealLogPage`
+  - copy-dishes-only is present in both the top quick-reuse surface and the
+    recent-meals list
+  - dish search can add the first filtered result on Enter
+  - first-dish dining-mode carry-over existed for manual add, but not for the
+    dish-only template-reuse path
+- Fixed that remaining Meals friction with a minimal in-place change:
+  - `MealLogManager` now exposes each template meal dish item's
+    `defaultDiningMode` in the existing UI map
+  - `MealLogPage::copyMealDishesFromTemplate()` now carries dining mode from
+    the first template dish when available and otherwise falls back to the
+    source meal's persisted `diningMode`
+  - recommendation linkage, feedback persistence, and SQLite schema stay
+    unchanged
+- Re-verified desktop compile in `build/desktop-debug-6103` after the
+  dish-only dining-mode carry fix
+- Re-verified that `MealAdvisor.exe` still starts successfully after the fix
+  by launching it locally and keeping it alive for `5` seconds before closing
+- Ran one more high-yield pre-real-data polish pass across the existing
+  Meals / Food / Recommendation surfaces instead of expanding scope:
+  - `MealLogManager` now rejects invalid meal timestamps instead of silently
+    falling back to the current time, validates `classAfterMeal` against
+    `minutesUntilNextClass`, and normalizes no-class saves back to `0`
+    minutes so meal state cannot drift into contradictory combinations
+  - `MealLogPage` now makes that rule visible in the form:
+    the next-class-minutes field is disabled when there is no class after the
+    meal, numeric input hints are clearer, and the dish-search helper text now
+    explains that search results are ranked instead of just filtered
+  - `MealLogManager` dish search now ranks by keyword closeness plus
+    recent-use count, so the existing Enter-to-add-first-result path is less
+    likely to add the wrong first row when multiple dishes loosely match
+  - `FoodManager` now validates merchant price level / supported dining modes,
+    validates dish enum fields and numeric ranges, stores normalized enum
+    values more consistently, and sorts merchant/dish results more
+    deterministically under ties
+  - `FoodPage` and `Main.qml` got a final visible-copy cleanup pass so the
+    most-used daily pages are more Chinese-consistent and explain search /
+    filter behavior more clearly without changing page structure
+  - `RecommendationEngine` keeps the existing V2 scoring and persistence path,
+    but now breaks equal-score candidate ties deterministically instead of
+    relying on container order
+- Re-verified desktop compile in `build/desktop-debug-6103` after the final
+  Meals / Food / Recommendation polish pass
+- Re-verified that `MealAdvisor.exe` still starts successfully after the final
+  polish pass by launching it locally and closing it after a short smoke check
+- Added a desktop-only `MealAdvisorValidation` target plus
+  `tools/validation/main.cpp` so the current local code path can be seeded and
+  checked without changing schema or clearing the whole SQLite DB
+- Added `MEALADVISOR_FIXED_NOW` support in `RecommendationEngine` so local
+  recommendation validation can run deterministically against specific class /
+  meal timestamps
+- Fixed a real runtime bug in `DatabaseManager`:
+  the default connection-name helper conflicted with the member function and
+  could crash the standalone validation binary during construction
+- Fixed a real meal-save guardrail bug in `MealLogManager`:
+  invalid non-ISO timestamps such as `2026/04/22 12:30` no longer parse
+  permissively and fall through as valid meals
+- Ran a validation-first local pass with the user-provided fake data:
+  - seeded `8` schedule entries, `6` merchants, `10` dishes, `10` meal logs,
+    and `10` feedback records into the existing local DB
+  - confirmed desktop build plus a short offscreen desktop smoke run
+  - confirmed Android arm64 packaging again via
+    `cmake --build build/android-arm64-debug-6103 --target MealAdvisor_make_apk`
+  - current validation baseline is `17/19` passed
+- Fixed an Android build regression introduced by the validation tooling:
+  `MealAdvisorValidation` is now created only on non-Android builds, so the
+  arm64 APK flow no longer tries to package the local validation executable
+- Finalized the Stage 6 supplement-parser contract in docs:
+  - added `docs/llm-supplement-rules.md`
+  - added `docs/llm-supplement-prompt.md`
+  - fixed the parser scope as strict JSON-only temporary adjustment parsing
+  - fixed the output contract to 13 fields under
+    `version = supplement_parser_v1`
+  - agreed strong fields use fixed-step values in `0.4-2.5`
+  - agreed weak fields use fixed-step values in `0.75-1.35`
+  - agreed `postMealSleepPlan` stays an enum and `plannedNapMinutes` stays a
+    fixed integer field
+  - agreed `sleepPlanConfidence` is a governance/gating field rather than a
+    direct business-weight bonus
+
+### `2026-04-23`
+
+- Implemented the minimum viable Stage 6 supplement-parser integration against
+  the real code path instead of leaving the new contract only in docs:
+  - `RecommendationEngine` now sends OpenAI Chat Completions style requests
+    using docs-backed `system` + `user` prompts and `temperature = 0`
+  - supplement parsing now only accepts the fixed
+    `version = supplement_parser_v1` object with the exact 13-field `result`
+  - local validation now rejects malformed JSON, wrong version, missing/extra
+    keys, invalid enums, invalid fixed-step values, and invalid nap-minute
+    values
+  - invalid output, network failure, timeout, and unconfigured API now all
+    fall back to the neutral default supplement object with explicit state /
+    status text
+- Added the minimum in-app LLM config path without removing env var support:
+  - `AppSettings` now stores API key / URL / model locally
+  - local saved values take priority
+  - blank local values still fall back to
+    `MEALADVISOR_LLM_API_KEY / API_URL / MODEL`
+  - `OPENAI_API_KEY` fallback is preserved
+- Updated the Home supplement area with the smallest practical UI expansion:
+  - added an in-app `LLM 配置` dialog
+  - surfaced parser state / fallback badges
+  - kept the existing supplement input entry point intact
+- Extended `MealAdvisorValidation` for Stage 6 parser scenarios:
+  - unconfigured -> fallback
+  - valid structured result -> accepted
+  - non-JSON output -> rejected + fallback
+  - invalid structure -> rejected + fallback
+  - invalid fixed-set value -> rejected + fallback
+  - network failure -> fallback
+  - timeout -> fallback
+- Re-verified desktop build in `build/desktop-debug-6103`
+- Re-ran `MealAdvisorValidation.exe`; current baseline is now `24/26` passed
+  and the remaining two failures are the pre-existing recommendation /
+  insight-heuristic gaps, not Stage 6 parser regressions
+- Re-ran a short desktop app smoke launch after the Stage 6 UI/config changes
+- Tightened Stage 6 supplement request stability and validation coverage:
+  - `RecommendationEngine` now sends
+    `response_format = { "type": "json_object" }` alongside the existing
+    OpenAI Chat Completions style payload
+  - `MealAdvisorValidation` now also exercises the real `parseSupplement()`
+    network path against a local mock server, covering:
+    request-shape capture, env/app-config priority, non-JSON output,
+    missing fields, extra fields, invalid fixed-set values, `401`, and timeout
+  - `MealAdvisorValidation` now has a small
+    `--evaluate-response-file` CLI path so live provider responses can be
+    checked by the same C++ local validator instead of hand-reimplementing the
+    contract
+- Completed one real DeepSeek provider pass on `2026-04-23` using six Chinese
+  supplement samples and the current Stage 6 payload shape:
+  - before the prompt cue tweak, strong-constraint / stay-awake wording tended
+    to collapse into `postMealSleepPlan = stay_awake` while leaving
+    `classConstraintWeight` and `sleepNeedLevel` neutral
+  - after the minimal prompt clarification, the same live-provider pass now
+    raises `classConstraintWeight = 1.25`, `sleepNeedLevel = 1.25`, and
+    `sleepPlanConfidence = 0.75` for strong-constraint / stay-awake samples
+  - `nap_before_class` now stably returns `plannedNapMinutes = 20` with
+    `sleepPlanConfidence = 1.0`
+  - `weak_preference` currently maps to `flavorIntent = 1.2`
+  - `budget_relaxed` currently maps to `budgetFlexIntent = 1.1`
+  - `cola_preference` currently maps to `colaIntent = 1.2`
+- Re-verified desktop build in `build/desktop-debug-6103` after the prompt /
+  validation follow-up changes
+- Re-ran the short desktop smoke launch after the final Stage 6 follow-up
+- Re-ran `MealAdvisorValidation.exe`; the baseline is now `35/37` passed, and
+  the remaining two failures are still the pre-existing recommendation /
+  feedback-heuristic gaps outside the supplement parser scope
+- Completed the final narrow Stage 6 local mapping pass:
+  - `budgetFlexIntent` now expands relaxed no-class dinner budget tolerance
+    enough for the current `budgetFlexIntent = 1.1` DeepSeek-style output to
+    affect real recommendation ranking
+  - a mock-server replay through the real parser path now confirms the parsed
+    budget-flex result can raise `牛肉火锅单人套餐` into top-3 for relaxed
+    high-budget dinner
+  - `colaIntent` now contributes as a weak drink-intent proxy and exact cola
+    dishes receive a slightly clearer bonus, but current seeded validation data
+    still has no cola / beverage candidate to lift
+  - the strict parser contract, app-config priority, env fallback, timeout,
+    401, non-JSON, invalid value, missing-field, and extra-field fallback paths
+    all remain covered by `MealAdvisorValidation`
+- Re-verified desktop app build in `build/desktop-debug-6103`
+- Re-ran short desktop smoke launch after the mapping pass
+- Re-ran `MealAdvisorValidation.exe`; the baseline is now `36/38` passed after
+  adding the new Stage 6 budget-flex replay case. The remaining two failures
+  are still the pre-existing non-LLM high-budget recommendation case and the
+  sparse feedback-insight heuristic case.
+- A new live external provider replay was not run in this shell because no
+  `MEALADVISOR_LLM_*`, `OPENAI_API_KEY`, or stored app LLM settings were
+  available; confidence for this pass comes from the already completed
+  DeepSeek pass plus the real local network parser replay.
+- Completed a Stage 1-6 closeout confirmation without changing application
+  code:
+  - reviewed the current product docs, Stage 6 parser docs, Home / Food /
+    Meals / Schedule QML, `RecommendationEngine`, and `MealAdvisorValidation`
+  - confirmed desktop build with
+    `cmake --build build/desktop-debug-6103 --target MealAdvisor`
+  - confirmed a short offscreen desktop smoke launch: `MealAdvisor.exe`
+    started and stayed alive for `5` seconds before the test stopped it
+  - re-ran `MealAdvisorValidation.exe`; baseline remains `36/38` passed
+  - the remaining failures are still the known non-LLM high-budget dinner
+    limitation and sparse feedback-insight heuristic limitation
+  - no Android APK build was run because this closeout changed no shared
+    build, packaging, Android, or Stage 6 application code
+  - no real provider replay was run because this closeout changed no Stage 6
+    code and the current shell has no `MEALADVISOR_LLM_*` or `OPENAI_API_KEY`
+    values
+- Started Stage 7 preflight with a deliberately small frontend repair pass:
+  - checked the runtime-loaded Home / Meals / Food / Schedule QML surfaces
+    through desktop build and offscreen launch
+  - fixed real user-visible mojibake in `Main.qml` and `FoodPage.qml`
+  - localized the most visible `SchedulePage.qml` English copy while leaving
+    the existing schedule data model and manager behavior unchanged
+  - changed the densest Home / Food / Schedule action rows from fixed
+    `RowLayout` to wrapping `Flow` controls so narrow mobile widths are less
+    likely to clip buttons
+  - did not change schema, recommendation scoring, Stage 6 parser behavior, or
+    LLM capability scope
+  - re-verified desktop build with
+    `cmake --build build/desktop-debug-6103 --target MealAdvisor`
+  - re-ran a short offscreen desktop app smoke launch; `MealAdvisor.exe`
+    started and stayed alive for `5` seconds before being stopped
+  - re-ran `MealAdvisorValidation.exe`; baseline remains `36/38`, with only
+    the two known non-blocking failures
+  - Android APK packaging was not run because only QML/docs changed, with no
+    shared build, packaging, Android, or C++ code change
+
 ## Next Steps
 
-1. Continue targeted encoding verification on runtime-visible dynamic strings,
-   prioritizing any remaining older manager/repository helper copy that still
-   reaches `Home`, `Food`, `Schedule`, or `Meals`.
-2. Validate the repaired Meals-page insight summary/detail/sample-priority copy
-   on real meal data to confirm the wording is now readable enough in-context.
-3. Keep tightening the feedback loop from the existing Meals page only where
-   real usage still shows ambiguity, especially:
-   - whether the first-scan-step highlight plus reordered `补充说明` block
-     actually reduce long-text reading
-   - whether representative-sample ordering still looks stable on real data
-   - whether recommendation-history inspect needs only another small inline
-     compare pass or something deeper later
-4. Then add a frontend-adjustable weight UI and a settings UI for API
-   configuration.
-5. Restore the real default schedule seed text after confirming the intended
-   course names and locations.
+Priority note:
+
+- Stage 1-6 can be treated as sealed for Stage 7 preflight. Do not keep
+  expanding Stage 6 or the recommendation core unless a new real regression is
+  found.
+
+1. Continue Stage 7 preflight with a second small pass rather than a broad
+   redesign: inspect Meals long-card density, Home dynamic recommendation text,
+   Food / Schedule form wrapping, empty states, and real phone-width touch
+   ergonomics.
+2. Keep the two known validation failures classified correctly:
+   the non-LLM high-budget dinner case is a local recommendation/context
+   limitation, and the missing `sleepiness_watch` / `stable_favorites` /
+   `low_repeat` insight case is sparse-data heuristic behavior.
+3. If a real provider key is available in a later window, optionally replay
+   the same six DeepSeek samples once more, but do not block Stage 7 on that
+   unless the provider output regresses.
+4. Continue avoiding dish enrichment, OCR, schema redesign, feedback parser,
+   rerank, or recommendation-core rewrite until Stage 7 basics are stable.
 
 ## Long-Task Plan
 
@@ -614,9 +978,18 @@ Use this sequence in the next window if continuing recommendation work:
 - `docs/handoff.md` and older planning docs had drifted behind the real code.
   They have been updated again this round, but this still needs discipline on
   future changes.
+- Older handoff prompts had temporarily drifted to an Android-first follow-up,
+  but the current user explicitly prioritized Stage 5 management-completion
+  UX; the working memory now reflects that priority shift.
 - PowerShell console output in this environment can misdisplay UTF-8 Chinese as
   mojibake; suspected encoding problems should be confirmed from file contents
   or runtime UI, not terminal echoes alone.
+- Home / Food / Schedule now have a first Stage 7 text cleanup, but dynamic
+  strings sourced from C++ managers and seeded data should still be checked in
+  runtime UI before declaring all user-visible mojibake closed.
+- Android SDK / NDK / Qt environment is aligned locally and the arm64 APK build
+  has now been re-verified after the portability and packaging fixes; rerun it
+  again only if Android-specific code or the Qt/Gradle environment changes.
 - The largest clearly user-visible damaged block found in this scan was the
   Meals-page insight helper copy in `src/core/meallogmanager.cpp`; that block
   has now been repaired, but older helper branches outside the scanned runtime
@@ -626,8 +999,28 @@ Use this sequence in the next window if continuing recommendation work:
 - `docs/recommendation-metrics-table.md` is currently readable in UTF-8 and can
   be used as a literal reference again; it should not be assumed corrupted
   unless a future scan finds a real damaged segment.
-- Supplement parsing currently depends on an external API but there is no
-  in-app settings screen for credentials or endpoint selection.
+- Supplement parsing now has:
+  - in-app config priority over env vars
+  - explicit `response_format = json_object` on the request path
+  - mock-server coverage for request shape plus failure states
+  - one real DeepSeek provider pass with six Chinese samples
+  but there has still not been a fully manual click-driven desktop UI live
+  session in this workspace; current confidence comes from code-path capture,
+  smoke launch, and real provider responses validated through the C++ parser.
+- The Stage 6 parser contract and final local mapping pass are now implemented.
+  Budget-relax intent has visible downstream effect through the real parser
+  path; cola/drink intent is mapped locally, but current seed data still lacks
+  actual cola / beverage candidates, so richer drink behavior is a data or
+  future add-on-candidate issue rather than a parser blocker.
+- The new Meals quick-template path plus the latest search-order / guardrail
+  pass still need a longer real-data usage session and Android touch
+  interaction to confirm they feel better in practice rather than only
+  compiling cleanly.
+- The current recommendation baseline still does not raise
+  `牛肉火锅单人套餐` into top-3 for the relaxed no-class high-budget dinner
+  validation scenario, because that intent is not explicitly represented in the
+  current non-LLM local context. This is no longer a Stage 6 blocker because
+  the parsed `budgetFlexIntent` path now does raise it.
 - `recommendation_records` now persists selected meal linkage more explicitly,
   and there is now a lightweight inline inspect path on Meals cards, but there
   is still no dedicated full recommendation-history view or candidate-to-
@@ -639,21 +1032,34 @@ Use this sequence in the next window if continuing recommendation work:
   more usable on the Meals page, but the new quick-scan copy and sample-
   priority heuristics still need validation against more real usage rather than
   one fixed rule set.
+- The current `feedbackInsights()` output for the seeded 10-log validation data
+  reaches `feedback_coverage`, `recommendation_hits`,
+  `weight_adjustment_suggestions`, and `context_split`, but still does not emit
+  `sleepiness_watch`, `stable_favorites`, or `low_repeat`; current heuristics
+  still favor repeated exact-dish evidence over sparse pattern-level signals.
 - The main Meals-page feedback insight / recommendation inspect / feedback
   editor copy is now readable again on the currently scanned path, but older
   non-Meals helper copy and unscanned runtime branches may still need targeted
   verification before declaring the encoding-cleanup effort done.
+- Stage 5 polish is now close to the point of diminishing returns before real
+  usage:
+  the highest-value remaining work is mostly validation and Android closure,
+  not another broad UI feature pass.
 
 ## Quick Start For New Window
 
+Prefer using `docs/next-task-prompt.md` for the immediate next task.
+Use `docs/resume-prompt.md` only as the generic fallback template.
+
 Read these files in order:
 
-1. `README.md`
-2. `docs/project-plan.md`
-3. `docs/data-model.md`
-4. `docs/product-rules.md`
-5. `docs/memory.md`
-6. `docs/handoff.md`
+1. `docs/next-task-prompt.md`
+2. `README.md`
+3. `docs/project-plan.md`
+4. `docs/data-model.md`
+5. `docs/product-rules.md`
+6. `docs/memory.md`
+7. `docs/handoff.md`
 
 Then continue the requested task directly from the current implementation
 without re-planning the whole product.

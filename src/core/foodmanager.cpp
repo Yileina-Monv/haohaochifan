@@ -6,10 +6,149 @@
 
 #include <algorithm>
 #include <QHash>
+#include <QSet>
 #include <QVariantMap>
 
 namespace
 {
+QString normalizedKey(const QString &value)
+{
+    return value.trimmed().toLower();
+}
+
+bool isOneOf(const QString &value, const QSet<QString> &allowedValues)
+{
+    return allowedValues.contains(normalizedKey(value));
+}
+
+int searchPriority(const QVariantMap &item,
+                   const QString &searchText,
+                   const QStringList &orderedKeys)
+{
+    if (searchText.isEmpty()) {
+        return 0;
+    }
+
+    int bestPriority = 9999;
+    for (int keyIndex = 0; keyIndex < orderedKeys.size(); ++keyIndex) {
+        const QString value =
+            item.value(orderedKeys.at(keyIndex)).toString().trimmed().toLower();
+        if (value.isEmpty()) {
+            continue;
+        }
+
+        if (value == searchText) {
+            bestPriority = std::min(bestPriority, keyIndex * 10);
+            continue;
+        }
+        if (value.startsWith(searchText)) {
+            bestPriority = std::min(bestPriority, keyIndex * 10 + 1);
+            continue;
+        }
+        if (value.contains(searchText)) {
+            bestPriority = std::min(bestPriority, keyIndex * 10 + 2);
+        }
+    }
+
+    return bestPriority;
+}
+
+void sortMerchantMatches(QVariantList *items, const QString &searchText)
+{
+    const QString loweredSearch = searchText.trimmed().toLower();
+    std::sort(items->begin(), items->end(),
+              [&loweredSearch](const QVariant &leftVariant,
+                               const QVariant &rightVariant) {
+                  const QVariantMap left = leftVariant.toMap();
+                  const QVariantMap right = rightVariant.toMap();
+
+                  if (!loweredSearch.isEmpty()) {
+                      const int leftPriority = searchPriority(
+                          left, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("campusArea"),
+                           QStringLiteral("notes"), QStringLiteral("priceLevel")});
+                      const int rightPriority = searchPriority(
+                          right, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("campusArea"),
+                           QStringLiteral("notes"), QStringLiteral("priceLevel")});
+                      if (leftPriority != rightPriority) {
+                          return leftPriority < rightPriority;
+                      }
+                  }
+
+                  const QString leftName =
+                      left.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  const QString rightName =
+                      right.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  if (leftName != rightName) {
+                      return leftName < rightName;
+                  }
+
+                  return left.value(QStringLiteral("id")).toInt() <
+                         right.value(QStringLiteral("id")).toInt();
+              });
+}
+
+void sortDishMatches(QVariantList *items, const QString &searchText)
+{
+    const QString loweredSearch = searchText.trimmed().toLower();
+    std::sort(items->begin(), items->end(),
+              [&loweredSearch](const QVariant &leftVariant,
+                               const QVariant &rightVariant) {
+                  const QVariantMap left = leftVariant.toMap();
+                  const QVariantMap right = rightVariant.toMap();
+
+                  if (!loweredSearch.isEmpty()) {
+                      const int leftPriority = searchPriority(
+                          left, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("merchantName"),
+                           QStringLiteral("category"),
+                           QStringLiteral("defaultDiningMode"),
+                           QStringLiteral("digestiveBurdenLevel"),
+                           QStringLiteral("sleepinessRiskLevel"),
+                           QStringLiteral("notes")});
+                      const int rightPriority = searchPriority(
+                          right, loweredSearch,
+                          {QStringLiteral("name"), QStringLiteral("merchantName"),
+                           QStringLiteral("category"),
+                           QStringLiteral("defaultDiningMode"),
+                           QStringLiteral("digestiveBurdenLevel"),
+                           QStringLiteral("sleepinessRiskLevel"),
+                           QStringLiteral("notes")});
+                      if (leftPriority != rightPriority) {
+                          return leftPriority < rightPriority;
+                      }
+                  }
+
+                  const int leftRecentUse =
+                      left.value(QStringLiteral("recentUseCount")).toInt();
+                  const int rightRecentUse =
+                      right.value(QStringLiteral("recentUseCount")).toInt();
+                  if (leftRecentUse != rightRecentUse) {
+                      return leftRecentUse > rightRecentUse;
+                  }
+
+                  const QString leftMerchant =
+                      left.value(QStringLiteral("merchantName")).toString().trimmed().toLower();
+                  const QString rightMerchant =
+                      right.value(QStringLiteral("merchantName")).toString().trimmed().toLower();
+                  if (leftMerchant != rightMerchant) {
+                      return leftMerchant < rightMerchant;
+                  }
+
+                  const QString leftName =
+                      left.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  const QString rightName =
+                      right.value(QStringLiteral("name")).toString().trimmed().toLower();
+                  if (leftName != rightName) {
+                      return leftName < rightName;
+                  }
+
+                  return left.value(QStringLiteral("id")).toInt() <
+                         right.value(QStringLiteral("id")).toInt();
+              });
+}
+
 template <typename CountMap>
 QVariantList topItemsFromCounts(const QVariantList &items,
                                 const CountMap &counts,
@@ -22,7 +161,10 @@ QVariantList topItemsFromCounts(const QVariantList &items,
 
     std::sort(rankedIds.begin(), rankedIds.end(),
               [](const QPair<int, int> &left, const QPair<int, int> &right) {
-                  return left.second > right.second;
+                  if (left.second != right.second) {
+                      return left.second > right.second;
+                  }
+                  return left.first < right.first;
               });
 
     QVariantList topItems;
@@ -91,6 +233,11 @@ QString FoodManager::dishSearch() const
     return m_dishSearch;
 }
 
+int FoodManager::dishMerchantFilterId() const
+{
+    return m_dishMerchantFilterId;
+}
+
 int FoodManager::merchantCount() const
 {
     return m_merchantCount;
@@ -126,6 +273,13 @@ void FoodManager::setDishSearch(const QString &searchText)
     emit foodChanged();
 }
 
+void FoodManager::setDishMerchantFilterId(int merchantId)
+{
+    m_dishMerchantFilterId = merchantId > 0 ? merchantId : 0;
+    refreshFilteredState();
+    emit foodChanged();
+}
+
 bool FoodManager::addMerchant(const QString &name,
                               const QString &campusArea,
                               const QString &priceLevel,
@@ -137,8 +291,18 @@ bool FoodManager::addMerchant(const QString &name,
                               int queueTimeMinutes,
                               const QString &notes)
 {
+    const QString normalizedPriceLevel = normalizedKey(priceLevel);
+
     if (name.trimmed().isEmpty()) {
         m_lastError = QStringLiteral("Merchant name is required.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (!isOneOf(normalizedPriceLevel,
+                 {QStringLiteral("budget"), QStringLiteral("mid"),
+                  QStringLiteral("high")})) {
+        m_lastError = QStringLiteral("Merchant price level must be budget, mid, or high.");
         emit foodChanged();
         return false;
     }
@@ -149,10 +313,16 @@ bool FoodManager::addMerchant(const QString &name,
         return false;
     }
 
+    if (!supportsDineIn && !supportsTakeaway && !supportsDelivery) {
+        m_lastError = QStringLiteral("Choose at least one supported dining mode.");
+        emit foodChanged();
+        return false;
+    }
+
     Merchant merchant;
     merchant.name = name.trimmed();
     merchant.campusArea = campusArea.trimmed();
-    merchant.priceLevel = priceLevel.trimmed();
+    merchant.priceLevel = normalizedPriceLevel;
     merchant.supportsDineIn = supportsDineIn;
     merchant.supportsTakeaway = supportsTakeaway;
     merchant.supportsDelivery = supportsDelivery;
@@ -186,8 +356,18 @@ bool FoodManager::updateMerchant(int merchantId,
                                  int queueTimeMinutes,
                                  const QString &notes)
 {
+    const QString normalizedPriceLevel = normalizedKey(priceLevel);
+
     if (merchantId <= 0 || name.trimmed().isEmpty()) {
         m_lastError = QStringLiteral("Valid merchant data is required.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (!isOneOf(normalizedPriceLevel,
+                 {QStringLiteral("budget"), QStringLiteral("mid"),
+                  QStringLiteral("high")})) {
+        m_lastError = QStringLiteral("Merchant price level must be budget, mid, or high.");
         emit foodChanged();
         return false;
     }
@@ -198,11 +378,17 @@ bool FoodManager::updateMerchant(int merchantId,
         return false;
     }
 
+    if (!supportsDineIn && !supportsTakeaway && !supportsDelivery) {
+        m_lastError = QStringLiteral("Choose at least one supported dining mode.");
+        emit foodChanged();
+        return false;
+    }
+
     Merchant merchant;
     merchant.id = merchantId;
     merchant.name = name.trimmed();
     merchant.campusArea = campusArea.trimmed();
-    merchant.priceLevel = priceLevel.trimmed();
+    merchant.priceLevel = normalizedPriceLevel;
     merchant.supportsDineIn = supportsDineIn;
     merchant.supportsTakeaway = supportsTakeaway;
     merchant.supportsDelivery = supportsDelivery;
@@ -265,6 +451,23 @@ bool FoodManager::addDish(const QString &name,
                           double mealImpactWeight,
                           const QString &notes)
 {
+    const QString normalizedDiningMode = normalizedKey(defaultDiningMode);
+    const QString normalizedCarbLevel = normalizedKey(carbLevel);
+    const QString normalizedFatLevel = normalizedKey(fatLevel);
+    const QString normalizedProteinLevel = normalizedKey(proteinLevel);
+    const QString normalizedVitaminLevel = normalizedKey(vitaminLevel);
+    const QString normalizedFiberLevel = normalizedKey(fiberLevel);
+    const QString normalizedSatietyLevel = normalizedKey(satietyLevel);
+    const QString normalizedDigestiveBurdenLevel =
+        normalizedKey(digestiveBurdenLevel);
+    const QString normalizedSleepinessRiskLevel =
+        normalizedKey(sleepinessRiskLevel);
+    const QString normalizedFlavorLevel = normalizedKey(flavorLevel);
+    const QString normalizedOdorLevel = normalizedKey(odorLevel);
+    const QSet<QString> allowedLevels = {QStringLiteral("low"),
+                                         QStringLiteral("medium"),
+                                         QStringLiteral("high")};
+
     if (name.trimmed().isEmpty()) {
         m_lastError = QStringLiteral("Dish name is required.");
         emit foodChanged();
@@ -277,8 +480,33 @@ bool FoodManager::addDish(const QString &name,
         return false;
     }
 
-    if (price < 0.0 || eatTimeMinutes < 0 || acquireEffortScore < 0 || mealImpactWeight <= 0.0) {
-        m_lastError = QStringLiteral("Dish numeric fields are invalid.");
+    if (!isOneOf(normalizedDiningMode,
+                 {QStringLiteral("dine_in"), QStringLiteral("takeaway"),
+                  QStringLiteral("delivery")})) {
+        m_lastError = QStringLiteral("Dish dining mode must be dine_in, takeaway, or delivery.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (!allowedLevels.contains(normalizedCarbLevel) ||
+        !allowedLevels.contains(normalizedFatLevel) ||
+        !allowedLevels.contains(normalizedProteinLevel) ||
+        !allowedLevels.contains(normalizedVitaminLevel) ||
+        !allowedLevels.contains(normalizedFiberLevel) ||
+        !allowedLevels.contains(normalizedSatietyLevel) ||
+        !allowedLevels.contains(normalizedDigestiveBurdenLevel) ||
+        !allowedLevels.contains(normalizedSleepinessRiskLevel) ||
+        !allowedLevels.contains(normalizedFlavorLevel) ||
+        !allowedLevels.contains(normalizedOdorLevel)) {
+        m_lastError = QStringLiteral("Dish nutrition and tag levels must stay within low, medium, or high.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (price < 0.0 || eatTimeMinutes <= 0 || eatTimeMinutes > 240 ||
+        acquireEffortScore < 1 || acquireEffortScore > 3 ||
+        mealImpactWeight <= 0.0 || mealImpactWeight > 3.0) {
+        m_lastError = QStringLiteral("Dish numeric fields are out of the supported range.");
         emit foodChanged();
         return false;
     }
@@ -288,19 +516,19 @@ bool FoodManager::addDish(const QString &name,
     dish.merchantId = merchantId;
     dish.category = category.trimmed();
     dish.price = price;
-    dish.defaultDiningMode = defaultDiningMode.trimmed();
+    dish.defaultDiningMode = normalizedDiningMode;
     dish.eatTimeMinutes = eatTimeMinutes;
     dish.acquireEffortScore = acquireEffortScore;
-    dish.carbLevel = carbLevel.trimmed();
-    dish.fatLevel = fatLevel.trimmed();
-    dish.proteinLevel = proteinLevel.trimmed();
-    dish.vitaminLevel = vitaminLevel.trimmed();
-    dish.fiberLevel = fiberLevel.trimmed();
-    dish.satietyLevel = satietyLevel.trimmed();
-    dish.digestiveBurdenLevel = digestiveBurdenLevel.trimmed();
-    dish.sleepinessRiskLevel = sleepinessRiskLevel.trimmed();
-    dish.flavorLevel = flavorLevel.trimmed();
-    dish.odorLevel = odorLevel.trimmed();
+    dish.carbLevel = normalizedCarbLevel;
+    dish.fatLevel = normalizedFatLevel;
+    dish.proteinLevel = normalizedProteinLevel;
+    dish.vitaminLevel = normalizedVitaminLevel;
+    dish.fiberLevel = normalizedFiberLevel;
+    dish.satietyLevel = normalizedSatietyLevel;
+    dish.digestiveBurdenLevel = normalizedDigestiveBurdenLevel;
+    dish.sleepinessRiskLevel = normalizedSleepinessRiskLevel;
+    dish.flavorLevel = normalizedFlavorLevel;
+    dish.odorLevel = normalizedOdorLevel;
     dish.isCombo = isCombo;
     dish.isBeverage = isBeverage;
     dish.mealImpactWeight = mealImpactWeight;
@@ -343,14 +571,56 @@ bool FoodManager::updateDish(int dishId,
                              double mealImpactWeight,
                              const QString &notes)
 {
+    const QString normalizedDiningMode = normalizedKey(defaultDiningMode);
+    const QString normalizedCarbLevel = normalizedKey(carbLevel);
+    const QString normalizedFatLevel = normalizedKey(fatLevel);
+    const QString normalizedProteinLevel = normalizedKey(proteinLevel);
+    const QString normalizedVitaminLevel = normalizedKey(vitaminLevel);
+    const QString normalizedFiberLevel = normalizedKey(fiberLevel);
+    const QString normalizedSatietyLevel = normalizedKey(satietyLevel);
+    const QString normalizedDigestiveBurdenLevel =
+        normalizedKey(digestiveBurdenLevel);
+    const QString normalizedSleepinessRiskLevel =
+        normalizedKey(sleepinessRiskLevel);
+    const QString normalizedFlavorLevel = normalizedKey(flavorLevel);
+    const QString normalizedOdorLevel = normalizedKey(odorLevel);
+    const QSet<QString> allowedLevels = {QStringLiteral("low"),
+                                         QStringLiteral("medium"),
+                                         QStringLiteral("high")};
+
     if (dishId <= 0 || name.trimmed().isEmpty() || merchantId <= 0) {
         m_lastError = QStringLiteral("Valid dish data is required.");
         emit foodChanged();
         return false;
     }
 
-    if (price < 0.0 || eatTimeMinutes < 0 || acquireEffortScore < 0 || mealImpactWeight <= 0.0) {
-        m_lastError = QStringLiteral("Dish numeric fields are invalid.");
+    if (!isOneOf(normalizedDiningMode,
+                 {QStringLiteral("dine_in"), QStringLiteral("takeaway"),
+                  QStringLiteral("delivery")})) {
+        m_lastError = QStringLiteral("Dish dining mode must be dine_in, takeaway, or delivery.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (!allowedLevels.contains(normalizedCarbLevel) ||
+        !allowedLevels.contains(normalizedFatLevel) ||
+        !allowedLevels.contains(normalizedProteinLevel) ||
+        !allowedLevels.contains(normalizedVitaminLevel) ||
+        !allowedLevels.contains(normalizedFiberLevel) ||
+        !allowedLevels.contains(normalizedSatietyLevel) ||
+        !allowedLevels.contains(normalizedDigestiveBurdenLevel) ||
+        !allowedLevels.contains(normalizedSleepinessRiskLevel) ||
+        !allowedLevels.contains(normalizedFlavorLevel) ||
+        !allowedLevels.contains(normalizedOdorLevel)) {
+        m_lastError = QStringLiteral("Dish nutrition and tag levels must stay within low, medium, or high.");
+        emit foodChanged();
+        return false;
+    }
+
+    if (price < 0.0 || eatTimeMinutes <= 0 || eatTimeMinutes > 240 ||
+        acquireEffortScore < 1 || acquireEffortScore > 3 ||
+        mealImpactWeight <= 0.0 || mealImpactWeight > 3.0) {
+        m_lastError = QStringLiteral("Dish numeric fields are out of the supported range.");
         emit foodChanged();
         return false;
     }
@@ -361,19 +631,19 @@ bool FoodManager::updateDish(int dishId,
     dish.merchantId = merchantId;
     dish.category = category.trimmed();
     dish.price = price;
-    dish.defaultDiningMode = defaultDiningMode.trimmed();
+    dish.defaultDiningMode = normalizedDiningMode;
     dish.eatTimeMinutes = eatTimeMinutes;
     dish.acquireEffortScore = acquireEffortScore;
-    dish.carbLevel = carbLevel.trimmed();
-    dish.fatLevel = fatLevel.trimmed();
-    dish.proteinLevel = proteinLevel.trimmed();
-    dish.vitaminLevel = vitaminLevel.trimmed();
-    dish.fiberLevel = fiberLevel.trimmed();
-    dish.satietyLevel = satietyLevel.trimmed();
-    dish.digestiveBurdenLevel = digestiveBurdenLevel.trimmed();
-    dish.sleepinessRiskLevel = sleepinessRiskLevel.trimmed();
-    dish.flavorLevel = flavorLevel.trimmed();
-    dish.odorLevel = odorLevel.trimmed();
+    dish.carbLevel = normalizedCarbLevel;
+    dish.fatLevel = normalizedFatLevel;
+    dish.proteinLevel = normalizedProteinLevel;
+    dish.vitaminLevel = normalizedVitaminLevel;
+    dish.fiberLevel = normalizedFiberLevel;
+    dish.satietyLevel = normalizedSatietyLevel;
+    dish.digestiveBurdenLevel = normalizedDigestiveBurdenLevel;
+    dish.sleepinessRiskLevel = normalizedSleepinessRiskLevel;
+    dish.flavorLevel = normalizedFlavorLevel;
+    dish.odorLevel = normalizedOdorLevel;
     dish.isCombo = isCombo;
     dish.isBeverage = isBeverage;
     dish.mealImpactWeight = mealImpactWeight;
@@ -485,6 +755,8 @@ void FoodManager::refreshState()
         dishMap.insert(QStringLiteral("odorLevel"), dish.odorLevel);
         dishMap.insert(QStringLiteral("mealImpactWeight"),
                        dish.mealImpactWeight);
+        dishMap.insert(QStringLiteral("recentUseCount"),
+                       dishFrequency.value(dish.id));
         dishMap.insert(QStringLiteral("notes"), dish.notes);
         dishMap.insert(QStringLiteral("isCombo"), dish.isCombo);
         dishMap.insert(QStringLiteral("isBeverage"), dish.isBeverage);
@@ -514,16 +786,30 @@ void FoodManager::refreshFilteredState()
             m_filteredMerchants.append(merchant);
         }
     }
+    sortMerchantMatches(&m_filteredMerchants, m_merchantSearch);
 
     for (const QVariant &dishVariant : m_dishes) {
         const QVariantMap dish = dishVariant.toMap();
+        if (m_dishMerchantFilterId > 0 &&
+            dish.value(QStringLiteral("merchantId")).toInt() != m_dishMerchantFilterId) {
+            continue;
+        }
+
         if (matchesSearch(dish, m_dishSearch,
                           {QStringLiteral("name"), QStringLiteral("merchantName"),
                            QStringLiteral("category"), QStringLiteral("notes"),
-                           QStringLiteral("carbLevel"), QStringLiteral("proteinLevel")})) {
+                           QStringLiteral("carbLevel"), QStringLiteral("fatLevel"),
+                           QStringLiteral("proteinLevel"), QStringLiteral("vitaminLevel"),
+                           QStringLiteral("fiberLevel"), QStringLiteral("satietyLevel"),
+                           QStringLiteral("digestiveBurdenLevel"),
+                           QStringLiteral("sleepinessRiskLevel"),
+                           QStringLiteral("defaultDiningMode"),
+                           QStringLiteral("flavorLevel"),
+                           QStringLiteral("odorLevel")})) {
             m_filteredDishes.append(dish);
         }
     }
+    sortDishMatches(&m_filteredDishes, m_dishSearch);
 }
 
 bool FoodManager::matchesSearch(const QVariantMap &item,

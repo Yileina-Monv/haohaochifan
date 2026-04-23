@@ -104,7 +104,7 @@ ScrollView {
                 spacing: 10
 
                 Label {
-                    text: "Schedule Management"
+                    text: "课表管理"
                     font.pixelSize: 28
                     font.bold: true
                     color: "#2d2419"
@@ -113,21 +113,21 @@ ScrollView {
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    text: "The managed planning window is Tuesday to Friday. You can reset the provided schedule, then edit or delete entries when real class changes happen."
+                    text: "当前规划范围是周二到周五。可以恢复预置课表，也可以在实际课程变化时编辑或删除条目。"
                     color: "#5d4b3a"
                 }
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
                     spacing: 12
 
                     Button {
-                        text: "Reload"
+                        text: "刷新"
                         onClicked: scheduleManager.reload()
                     }
 
                     Button {
-                        text: "Restore Provided Schedule"
+                        text: "恢复预置课表"
                         onClicked: {
                             if (scheduleManager.resetToProvidedSchedule()) {
                                 resetScheduleForm()
@@ -136,9 +136,7 @@ ScrollView {
                     }
 
                     Label {
-                        Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignRight
-                        text: "Entries: " + scheduleManager.totalEntryCount
+                        text: "条目数：" + scheduleManager.totalEntryCount
                         color: "#6c5847"
                     }
                 }
@@ -165,7 +163,7 @@ ScrollView {
                 spacing: 10
 
                 Label {
-                    text: "Class Periods"
+                    text: "上课节次"
                     font.pixelSize: 20
                     font.bold: true
                     color: "#243223"
@@ -191,7 +189,7 @@ ScrollView {
                                 spacing: 4
 
                                 Label {
-                                    text: "Period " + modelData.periodIndex
+                                    text: "第 " + modelData.periodIndex + " 节"
                                     font.bold: true
                                     color: "#314530"
                                 }
@@ -239,7 +237,7 @@ ScrollView {
                         Label {
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignRight
-                            text: modelData.entryCount > 0 ? (modelData.entryCount + " entries") : "No scheduled classes"
+                            text: modelData.entryCount > 0 ? (modelData.entryCount + " 个条目") : "暂无课程"
                             color: "#6b5643"
                         }
                     }
@@ -275,12 +273,12 @@ ScrollView {
                                         }
 
                                         Button {
-                                            text: "Edit"
+                                            text: "编辑"
                                             onClicked: loadEntry(modelData)
                                         }
 
                                         Button {
-                                            text: "Delete"
+                                            text: "删除"
                                             onClicked: {
                                                 if (scheduleManager.deleteEntry(modelData.id) && editingEntryId === modelData.id) {
                                                     resetScheduleForm()
@@ -302,7 +300,7 @@ ScrollView {
 
                                     Label {
                                         visible: modelData.campusZone.length > 0 || modelData.intensityLevel.length > 0
-                                        text: "Zone " + modelData.campusZone + " | intensity " + modelData.intensityLevel
+                                        text: "区域 " + modelData.campusZone + " | 强度 " + modelData.intensityLevel
                                         color: "#5a4a3c"
                                     }
 
@@ -319,7 +317,7 @@ ScrollView {
 
                         Label {
                             visible: modelData.entryCount === 0
-                            text: "Leave it empty, or add ad-hoc self-study, labs, or temporary plans."
+                            text: "可以保持为空，也可以添加临时自习、实验或短期安排。"
                             color: "#7d756b"
                         }
                     }
@@ -342,7 +340,7 @@ ScrollView {
                     Layout.fillWidth: true
 
                     Label {
-                        text: editingEntryId > 0 ? "Edit Schedule Entry" : "Add Schedule Entry"
+                        text: editingEntryId > 0 ? "编辑课表条目" : "新增课表条目"
                         font.pixelSize: 20
                         font.bold: true
                         color: "#223747"
@@ -350,7 +348,7 @@ ScrollView {
 
                     Button {
                         visible: editingEntryId > 0
-                        text: "Cancel"
+                        text: "取消"
                         onClicked: resetScheduleForm()
                     }
                 }
@@ -365,10 +363,10 @@ ScrollView {
                         id: weekdayBox
                         Layout.fillWidth: true
                         model: [
-                            { label: "Tuesday", value: 2 },
-                            { label: "Wednesday", value: 3 },
-                            { label: "Thursday", value: 4 },
-                            { label: "Friday", value: 5 }
+                            { label: "周二", value: 2 },
+                            { label: "周三", value: 3 },
+                            { label: "周四", value: 4 },
+                            { label: "周五", value: 5 }
                         ]
                         textRole: "label"
                         valueRole: "value"
@@ -377,7 +375,7 @@ ScrollView {
                     TextField {
                         id: courseNameField
                         Layout.fillWidth: true
-                        placeholderText: "Course name"
+                        placeholderText: "课程名"
                     }
 
                     ComboBox {
@@ -399,30 +397,30 @@ ScrollView {
                     TextField {
                         id: locationField
                         Layout.fillWidth: true
-                        placeholderText: "Location"
+                        placeholderText: "地点"
                     }
 
                     TextField {
                         id: campusZoneField
                         Layout.fillWidth: true
-                        placeholderText: "Campus zone"
+                        placeholderText: "校区区域"
                     }
 
                     TextField {
                         id: intensityField
                         Layout.fillWidth: true
-                        placeholderText: "Intensity level"
+                        placeholderText: "强度，例如 medium"
                     }
 
                     TextField {
                         id: notesField
                         Layout.fillWidth: true
-                        placeholderText: "Notes"
+                        placeholderText: "备注"
                     }
                 }
 
                 Button {
-                    text: editingEntryId > 0 ? "Update Entry" : "Add Entry"
+                    text: editingEntryId > 0 ? "更新条目" : "添加条目"
                     onClicked: saveEntry()
                 }
             }
