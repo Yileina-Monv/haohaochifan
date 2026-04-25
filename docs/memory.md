@@ -1,6 +1,6 @@
 ﻿# Project Memory
 
-Last updated: `2026-04-23`
+Last updated: `2026-04-25`
 
 ## Update Rule
 
@@ -24,9 +24,9 @@ If the current task changes project direction or major behavior, also update
 ## Current Snapshot
 
 - Project: `MealAdvisor`
-- Root path: `D:\Codex\haohaochifan`
+- Root path: `D:\Codex\2026-04-18-qt-c-app`
 - Stack: `Qt Quick/QML + C++ + SQLite`
-- Desktop build: compiling successfully in `build/desktop-debug-6103`
+- Desktop build: compiling successfully in `build/desktop-debug`
 - Qt and Android environment are now aligned on this machine:
   Qt `6.10.3` desktop + Android kits, JDK `21`, Android SDK command-line
   tools, build-tools `36.0.0`, platforms `android-35` / `android-36`,
@@ -62,6 +62,31 @@ If the current task changes project direction or major behavior, also update
   Home / Food visible mojibake was repaired, Schedule's main English copy was
   localized, and a few dense action rows now wrap instead of squeezing on
   phone-width screens
+- Stage 7 preflight second pass has now repaired higher-risk runtime-visible
+  copy:
+  Home planning/status summaries, recommendation initial/context text, LLM
+  parser validation details, Food / Meals / Schedule manager guardrail errors,
+  and the default schedule/planning seed labels are now Chinese-visible; two
+  dense Meals quick-action rows now wrap instead of squeezing on narrow screens
+- Stage 7 preflight third pass has now fixed a real desktop/mobile-width
+  runtime usability issue:
+  the main QML cards now compute content height instead of collapsing into
+  overlapping text, normal enabled button text is forced readable through a
+  local QML button wrapper, and Food / Schedule enum selectors now show Chinese
+  labels while still passing the original enum values to C++
+- Stage 7 preflight fourth pass has now tightened lower-page narrow-width
+  behavior:
+  Food / Schedule / Meals lower forms switch to one-column entry where needed,
+  dense lower-card title/action rows now stack into readable label-plus-action
+  flows, the Meals feedback score editor is no longer a confusing three-column
+  grid, and the desktop window now allows a narrower smoke width for mobile
+  preflight checks
+- Stage 7 final desktop/manual preflight pass has now fixed the last
+  must-fix usability gaps found in this pass:
+  Food's dish clear action now clears both search text and merchant filter,
+  Meals has an explicit clear-search path for empty dish-picker results, and
+  Meals save can now be clicked with no selected dishes so the existing C++
+  guardrail message is reachable instead of hidden behind a disabled button
 - Supplement parser UI state is now explicit enough to distinguish:
   unconfigured, parsing, success, invalid response, network failure, and
   fallback-to-default
@@ -932,6 +957,136 @@ Completion signal:
   - Android APK packaging was not run because only QML/docs changed, with no
     shared build, packaging, Android, or C++ code change
 
+### `2026-04-24`
+
+- Continued Stage 7 preflight with a second narrow runtime-copy and density
+  pass:
+  - inspected Home dynamic recommendation/config/status paths, Meals long-card
+    quick reuse and insight sample cards, Food form/list copy, Schedule cards
+    and dynamic C++ manager text
+  - localized Home `AppState` summaries so planning days, budget, and default
+    recommendation profile no longer appear as English phrases
+  - localized `ScheduleManager` runtime strings, reset/imported schedule seed
+    labels, class-period session labels, weekday labels, period ranges, and
+    guardrail errors
+  - localized Food and Meals manager validation errors so form failure states
+    are visible in Chinese
+  - localized recommendation initial/context/fallback copy and supplement
+    parser validation-error details while preserving the strict Stage 6 parser
+    contract and request shape
+  - changed the Meals recent-template card and insight supporting-meal sample
+    card header/action rows from fixed `RowLayout` pressure to a wrapping
+    label-plus-`Flow` layout
+  - updated planning/profile seed labels in `DatabaseManager` for fresh DBs;
+    existing DBs keep their data, while Home maps old `Class Day` /
+    `Commute Day` names to Chinese for display
+  - updated `MealAdvisorValidation` text assertions to match the Chinese
+    guardrail messages
+  - no schema, recommendation scoring, Stage 6 parser capability, LLM rerank,
+    OCR, dish enrichment, or feedback parser work was added
+- Verification for this pass:
+  - `cmake --build build\desktop-debug --target MealAdvisor` passed
+  - `cmake --build build\desktop-debug --target MealAdvisorValidation` passed
+  - short offscreen desktop smoke launch passed; `MealAdvisor.exe` stayed
+    alive for `5` seconds
+  - `MealAdvisorValidation.exe` is back at `36/38`; the two remaining failures
+    are still the known non-blocking non-LLM hotpot case and sparse feedback
+    insight case
+  - Android APK packaging was not run because this pass did not touch Android,
+    shared build configuration, packaging, or Android-specific code
+- Continued Stage 7 preflight with a third small runtime visual pass:
+  - ran the desktop app and inspected Home / Schedule / Food / Meals at the
+    default `420x800` size and a narrower `340x800` phone-like width
+  - fixed the blocking QML layout problem where cards in Home / Schedule /
+    Food / Meals could collapse to near-zero height and overlap controls
+  - added a local `ReadableButton` wrapper for normal QML buttons so enabled
+    action labels such as LLM config, save, generate, edit, delete, and quick
+    reuse stay readable under the desktop style
+  - repaired the remaining visibly damaged Home static strings and Home
+    action labels
+  - changed the Home LLM status/action row to wrap instead of pushing the
+    config button off the card
+  - changed Food merchant price, dish dining mode, and dish level selectors to
+    display Chinese labels while still submitting `budget/mid/high`,
+    `dine_in/takeaway/delivery`, and `low/medium/high` values to C++
+  - changed Schedule intensity from free-text `medium` entry to a Chinese
+    low/medium/high ComboBox that still submits the original enum value
+  - did not change schema, recommendation scoring, Stage 6 parser behavior,
+    LLM capability scope, Android, or packaging
+- Verification for the third pass:
+  - `cmake --build build\desktop-debug --target MealAdvisor` passed
+  - short desktop smoke launch passed; `MealAdvisor.exe` stayed alive for
+    `5` seconds
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - Android APK packaging was not run because this pass only touched QML and
+    docs, with no Android-specific, packaging, build-system, or shared C++
+    logic changes
+
+### `2026-04-25`
+
+- Continued Stage 7 preflight with a fourth small frontend-only pass:
+  - inspected the existing QML lower-page structures for Home / Schedule /
+    Food / Meals after the card-height and readable-button fix
+  - fixed remaining must-fix narrow-width risks in the lower Food page:
+    merchant and dish forms now collapse from two columns to one on narrower
+    widths, nutrition level selectors reduce from three columns to two, lower
+    merchant/dish list cards stack long names above edit/delete actions, and
+    dense metadata labels wrap instead of clipping
+  - fixed remaining must-fix narrow-width risks in the lower Schedule page:
+    weekday cards and schedule-entry cards no longer keep long headings and
+    edit/delete actions in a single squeezed row, the add/edit form collapses
+    to one column on narrower widths, and schedule detail labels wrap
+  - fixed remaining must-fix narrow-width risks in Meals:
+    the meal info and dish-picker grids collapse to one column, selected-dish
+    rows stack the remove action below the details, insight cards and
+    supporting-dish cards stack long text above actions, and the feedback score
+    editor now uses clear label/value pairs instead of a cramped three-column
+    sequence
+  - fixed a navigation-level narrow desktop issue by giving the app a smaller
+    explicit minimum window size and equal-width top tabs so the four primary
+    page entries remain intended to fit at mobile-like widths
+  - no schema, recommendation scoring, C++ behavior, Stage 6 parser behavior,
+    LLM capability scope, Android, or packaging changes were made
+- Verification for the fourth pass:
+  - `cmake --build build\desktop-debug --target MealAdvisor` passed
+  - a real desktop smoke/screenshot launch passed; `MealAdvisor.exe` stayed
+    alive for at least `5` seconds while screenshots were captured
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - Android APK packaging was not run because this pass only touched QML and
+    docs, with no Android-specific, packaging, build-system, or shared C++
+    logic changes
+- Continued Stage 7 preflight with the final desktop/manual frontend pass
+  before Android packaging:
+  - reviewed the runtime paths requested for Home, Schedule, Food, and Meals
+    against the real QML/C++ bindings, with a real desktop process smoke check
+    for app startup stability
+  - fixed Food dish-search usability so `清空筛选` now clears both the text
+    search and the merchant filter; previously it only cleared the merchant
+    filter, leaving a hidden active text filter in place
+  - fixed Meals dish-picker empty/search usability by adding an explicit
+    `清空搜索` action when search text is active
+  - fixed Meals save guardrail reachability by allowing the save button to be
+    clicked with no selected dishes, so the existing manager error
+    `请至少给这餐添加一道菜。` can actually appear in the page error area
+  - no schema, recommendation scoring, C++ behavior, Stage 6 parser behavior,
+    LLM capability scope, Android, or packaging changes were made
+- Verification for the final desktop/manual preflight pass:
+  - `cmake --build build\desktop-debug --target MealAdvisor` passed
+  - real desktop smoke launch passed; `MealAdvisor.exe` stayed alive for
+    `5` seconds
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - validation coverage in this pass was mixed: app launch was a real runtime
+    desktop process, the click-path findings were static/runtime-binding review
+    due the lack of direct GUI click automation in this shell, and
+    `MealAdvisorValidation` was the existing local mock/offline regression
+    target
+  - Android APK packaging was not run because this pass only touched QML/docs,
+    with no Android-specific, packaging, build-system, or shared C++ logic
+    changes
+
 ## Next Steps
 
 Priority note:
@@ -940,10 +1095,10 @@ Priority note:
   expanding Stage 6 or the recommendation core unless a new real regression is
   found.
 
-1. Continue Stage 7 preflight with a second small pass rather than a broad
-   redesign: inspect Meals long-card density, Home dynamic recommendation text,
-   Food / Schedule form wrapping, empty states, and real phone-width touch
-   ergonomics.
+1. Move Stage 7 to Android packaging and on-device/touch validation now that
+   the final desktop preflight has no new runtime blocker: build the arm64 APK,
+   install/run it if a device or emulator is available, and focus on native
+   screen sizing, touch scrolling, keyboard entry, and save/edit paths.
 2. Keep the two known validation failures classified correctly:
    the non-LLM high-budget dinner case is a local recommendation/context
    limitation, and the missing `sleepiness_watch` / `stable_favorites` /
@@ -984,9 +1139,11 @@ Use this sequence in the next window if continuing recommendation work:
 - PowerShell console output in this environment can misdisplay UTF-8 Chinese as
   mojibake; suspected encoding problems should be confirmed from file contents
   or runtime UI, not terminal echoes alone.
-- Home / Food / Schedule now have a first Stage 7 text cleanup, but dynamic
-  strings sourced from C++ managers and seeded data should still be checked in
-  runtime UI before declaring all user-visible mojibake closed.
+- Home / Food / Schedule / Meals now have multiple Stage 7 frontend cleanup
+  passes covering high-risk copy, enum display, card height, button readability,
+  lower-page narrow-width wrapping, Food/Menus search clearing, and Meals save
+  guardrail reachability. Remaining text/layout work should be targeted
+  Android/runtime confirmation, not another broad sweep.
 - Android SDK / NDK / Qt environment is aligned locally and the arm64 APK build
   has now been re-verified after the portability and packaging fixes; rerun it
   again only if Android-specific code or the Qt/Gradle environment changes.
@@ -1004,9 +1161,11 @@ Use this sequence in the next window if continuing recommendation work:
   - explicit `response_format = json_object` on the request path
   - mock-server coverage for request shape plus failure states
   - one real DeepSeek provider pass with six Chinese samples
-  but there has still not been a fully manual click-driven desktop UI live
-  session in this workspace; current confidence comes from code-path capture,
-  smoke launch, and real provider responses validated through the C++ parser.
+  but the latest desktop preflight still did not have direct GUI click
+  automation available in this shell; current confidence comes from QML/C++
+  path review, real desktop process smoke launch, local mock/offline
+  validation, and prior real provider responses validated through the C++
+  parser.
 - The Stage 6 parser contract and final local mapping pass are now implemented.
   Budget-relax intent has visible downstream effect through the real parser
   path; cola/drink intent is mapped locally, but current seed data still lacks
@@ -1016,6 +1175,10 @@ Use this sequence in the next window if continuing recommendation work:
   pass still need a longer real-data usage session and Android touch
   interaction to confirm they feel better in practice rather than only
   compiling cleanly.
+- The fourth and final desktop Stage 7 passes reduced obvious desktop
+  narrow-width and empty/search/save-path risks, but they are still not a
+  substitute for a real Android touch pass with native screen sizing,
+  keyboard entry, and scrolling.
 - The current recommendation baseline still does not raise
   `牛肉火锅单人套餐` into top-3 for the relaxed no-class high-budget dinner
   validation scenario, because that intent is not explicitly represented in the

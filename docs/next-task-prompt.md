@@ -3,7 +3,7 @@
 Use the prompt below in the next new Codex window.
 
 ```text
-The project path is D:\Codex\haohaochifan.
+The project path is D:\Codex\2026-04-18-qt-c-app.
 
 Please read these files first to build context:
 1. README.md
@@ -15,24 +15,45 @@ Please read these files first to build context:
 7. docs/resume-prompt.md
 
 Then read these task-specific files before coding:
-8. app/qml/Main.qml
-9. app/qml/FoodPage.qml
-10. app/qml/MealLogPage.qml
-11. app/qml/SchedulePage.qml
-12. src/recommendation/recommendationengine.h
-13. src/recommendation/recommendationengine.cpp
-14. tools/validation/main.cpp
+8. CMakeLists.txt
+9. app/qml/Main.qml
+10. app/qml/FoodPage.qml
+11. app/qml/MealLogPage.qml
+12. app/qml/SchedulePage.qml
+13. src/core/foodmanager.cpp
+14. src/core/meallogmanager.cpp
+15. src/core/schedulemanager.cpp
+16. tools/validation/main.cpp
 
 Current handoff assumption:
-Stage 1-6 are sealed enough for Stage 7 work. The first Stage 7 preflight pass
-has started and made only minimal frontend changes:
-- Home / Food visible static QML mojibake was repaired.
-- Schedule's main English UI copy was localized to Chinese.
-- A few dense Home / Food / Schedule action rows now wrap on phone-width
-  screens.
-- No schema, recommendation-core, Stage 6 parser, or LLM capability changes
-  were made.
-- Desktop build passed, short offscreen desktop smoke launch passed, and
+Stage 1-6 are sealed enough for Stage 7 work. Stage 7 desktop preflight has now
+had five small passes:
+- First pass: repaired obvious Home / Food static QML copy, localized major
+  Schedule UI copy, and made several dense Home / Food / Schedule action rows
+  wrap on phone-width screens.
+- Second pass: localized higher-risk runtime text from AppState,
+  ScheduleManager, FoodManager, MealLogManager, RecommendationEngine, parser
+  validation details, and default planning/schedule seeds; updated validation
+  assertions to match Chinese guardrail copy; made two dense Meals quick-action
+  rows wrap.
+- Third pass: fixed the QML card-height collapse/overlap issue across Home /
+  Schedule / Food / Meals, added a local readable-button wrapper, repaired
+  remaining Home copy, wrapped the Home LLM status/action row, and changed Food
+  / Schedule enum selectors to show Chinese labels while preserving stored enum
+  values.
+- Fourth pass: tightened lower-page narrow-width behavior in Food / Schedule /
+  Meals by collapsing lower forms at narrow widths, stacking long lower-card
+  title/action rows, wrapping dense metadata labels, making the Meals feedback
+  score editor clearer, and tightening the desktop minimum width/top-tab setup.
+- Fifth/final desktop pass: fixed the must-fix search/save usability gaps found
+  in the final review. Food dish `清空筛选` now clears both search text and
+  merchant filter; Meals dish picker has an explicit `清空搜索` action; Meals
+  save can be clicked with no selected dishes so the existing C++ guardrail
+  message is reachable.
+- No schema, recommendation scoring, Stage 6 parser capability, LLM rerank,
+  OCR, dish enrichment, feedback parser, Android, or packaging changes were
+  made in the fifth pass.
+- Desktop build passed, real desktop 5-second smoke launch passed, and
   MealAdvisorValidation remains 36/38.
 
 The two remaining validation failures are known non-blockers:
@@ -40,13 +61,22 @@ The two remaining validation failures are known non-blockers:
 - sparse seeded feedback does not emit sleepiness-watch / stable-favorites /
   low-repeat insight types
 
+Important validation boundary:
+The fifth desktop pass used real desktop process startup, static/runtime-binding
+review of the requested click paths, and the existing local mock/offline
+MealAdvisorValidation target. Direct GUI click automation for the native Qt
+window was not available in that shell. Treat Android on-device/touch validation
+as the next real interaction confidence step.
+
 Then continue with this concrete task:
-Continue Stage 7 preflight, second small frontend pass only.
+Continue Stage 7 by running the Android packaging and first Android runtime
+validation pass.
 
 Primary goal:
-Inspect the remaining high-risk runtime frontend surfaces and fix only
-must-fix usability or visible-copy issues. Prioritize real user-visible
-problems over polish.
+Produce and verify an Android arm64 debug APK using the already aligned Qt
+6.10.3 / Android SDK / NDK / JDK environment, then run the app on a real device
+or emulator if available. Prioritize packaging/runtime blockers and touch/keyboard
+usability over polish.
 
 Scope limits:
 - Do not expand Stage 6.
@@ -60,28 +90,39 @@ Scope limits:
 
 Suggested order:
 1. Confirm current git status and preserve existing uncommitted work.
-2. Re-scan runtime-visible copy for Home / Meals / Food / Schedule, including
-   dynamic text coming from C++ managers or seeded data.
-3. Focus on Meals long-card density and Home dynamic recommendation output;
-   Food / Schedule only need follow-up if form wrapping or copy is still
-   obviously bad.
-4. If you make QML changes, run:
-   `cmake --build build/desktop-debug-6103 --target MealAdvisor`
-5. Run a short desktop smoke launch.
-6. Run:
-   `build/desktop-debug-6103/MealAdvisorValidation.exe`
-7. Do not run Android APK packaging unless shared build / packaging / Android
-   logic changes. If needed, use:
-   `cmake --build build/android-arm64-debug-6103 --target MealAdvisor_make_apk`
-8. If code or docs change, update `docs/memory.md`.
-9. If handoff assumptions change, update `docs/handoff.md`.
-10. Before finishing, replace this file with the next concrete prompt.
+2. Re-run the desktop fast regression first:
+   `$env:PATH='C:\Qt\Tools\mingw1310_64\bin;C:\Qt\6.10.3\mingw_64\bin;C:\Qt\Tools\Ninja;' + $env:PATH`
+   `& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build build\desktop-debug --target MealAdvisor`
+   `& '.\build\desktop-debug\MealAdvisorValidation.exe'`
+3. Inspect the existing Android build directory and CMake cache before changing
+   build files.
+4. Build the Android arm64 debug APK using the current Qt Android kit/build
+   setup. Prefer the existing `build\android-arm64-debug` configuration if it
+   is still valid.
+5. If the APK build fails, fix only packaging/build/runtime blockers. Avoid
+   unrelated UI polish.
+6. If `adb` can see a device or emulator, install and launch the APK. Check:
+   - app opens without crashing
+   - top tabs are reachable
+   - Home generate recommendation and LLM config dialog open/close
+   - Schedule reset/add validation/edit/cancel
+   - Food merchant/dish add/edit/cancel, search clear, filter clear
+   - Meals dish search/clear, add/remove selected dish, save empty guardrail,
+     feedback save/update, and scroll through lower cards
+7. If no device/emulator is available, state that clearly and keep verification
+   to APK build plus desktop/local validation.
+8. Do not run live external LLM provider tests unless a key is already available
+   and the task specifically needs it.
+9. If code or docs change, update `docs/memory.md`.
+10. If handoff assumptions change, update `docs/handoff.md`.
+11. Before finishing, replace this file with the next concrete prompt.
 
 At the end, state clearly:
-1. Which pages were checked.
-2. Which issues were must-fix and fixed.
-3. Which issues are safe follow-up polish.
-4. Which validation paths were real runtime, mock/offline, or static.
-5. Whether Android APK was run; if not, why.
-6. The recommended next Stage 7 action.
+1. Whether the Android APK was built, and its path if successful.
+2. Whether install/launch was run on a real device or emulator.
+3. Which Android runtime paths were checked.
+4. Which issues were must-fix and fixed.
+5. Which validation paths were real runtime, mock/offline, static, or skipped.
+6. Whether the two known desktop validation failures changed.
+7. The recommended next Stage 7 action.
 ```

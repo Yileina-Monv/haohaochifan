@@ -3,11 +3,69 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 ScrollView {
+    component AutoHeightRectangle: Rectangle {
+        Layout.preferredHeight: implicitHeight
+        implicitHeight: childrenRect.height > 0
+                        ? childrenRect.y + childrenRect.height + childrenRect.y
+                        : 0
+    }
+    component ReadableButton: Button {
+        id: readableButton
+
+        contentItem: Label {
+            text: readableButton.text
+            color: readableButton.enabled ? "#2c241b" : "#8a8176"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
     id: root
     clip: true
 
+    readonly property bool narrowLayout: root.availableWidth < 380
     property int editingMerchantId: 0
     property int editingDishId: 0
+    property var priceLevelOptions: [
+        { label: "实惠", value: "budget" },
+        { label: "中等", value: "mid" },
+        { label: "偏高", value: "high" }
+    ]
+    property var diningModeOptions: [
+        { label: "堂食", value: "dine_in" },
+        { label: "打包", value: "takeaway" },
+        { label: "外卖", value: "delivery" }
+    ]
+    property var levelOptions: [
+        { label: "低", value: "low" },
+        { label: "中", value: "medium" },
+        { label: "高", value: "high" }
+    ]
+
+    function comboIndexByValue(box, value) {
+        for (let i = 0; i < box.count; ++i) {
+            const item = box.model[i]
+            if (item && item.value !== undefined) {
+                if (item.value === value) {
+                    return i
+                }
+                continue
+            }
+            if (item === value) {
+                return i
+            }
+        }
+        return box.count > 0 ? 0 : -1
+    }
+
+    function optionLabel(options, value) {
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === value) {
+                return options[i].label
+            }
+        }
+        return value
+    }
 
     function merchantIndexForId(merchantId) {
         for (let i = 0; i < dishMerchantBox.count; ++i) {
@@ -50,7 +108,7 @@ ScrollView {
         editingMerchantId = merchant.id
         merchantNameField.text = merchant.name
         merchantAreaField.text = merchant.campusArea
-        merchantPriceLevelBox.currentIndex = Math.max(0, merchantPriceLevelBox.find(merchant.priceLevel))
+        merchantPriceLevelBox.currentIndex = comboIndexByValue(merchantPriceLevelBox, merchant.priceLevel)
         merchantDistanceField.text = String(merchant.distanceMinutes)
         merchantQueueField.text = String(merchant.queueTimeMinutes)
         merchantDeliveryField.text = String(merchant.deliveryEtaMinutes)
@@ -92,20 +150,20 @@ ScrollView {
         dishNameField.text = dish.name
         dishCategoryField.text = dish.category
         dishPriceField.text = String(dish.price)
-        dishDiningModeBox.currentIndex = Math.max(0, dishDiningModeBox.find(dish.defaultDiningMode))
+        dishDiningModeBox.currentIndex = comboIndexByValue(dishDiningModeBox, dish.defaultDiningMode)
         dishEatTimeField.text = String(dish.eatTimeMinutes)
         dishEffortField.text = String(dish.acquireEffortScore)
         dishImpactField.text = String(dish.mealImpactWeight)
-        carbBox.currentIndex = Math.max(0, carbBox.find(dish.carbLevel))
-        fatBox.currentIndex = Math.max(0, fatBox.find(dish.fatLevel))
-        proteinBox.currentIndex = Math.max(0, proteinBox.find(dish.proteinLevel))
-        vitaminBox.currentIndex = Math.max(0, vitaminBox.find(dish.vitaminLevel))
-        fiberBox.currentIndex = Math.max(0, fiberBox.find(dish.fiberLevel))
-        satietyBox.currentIndex = Math.max(0, satietyBox.find(dish.satietyLevel))
-        burdenBox.currentIndex = Math.max(0, burdenBox.find(dish.digestiveBurdenLevel))
-        sleepinessBox.currentIndex = Math.max(0, sleepinessBox.find(dish.sleepinessRiskLevel))
-        flavorBox.currentIndex = Math.max(0, flavorBox.find(dish.flavorLevel))
-        odorBox.currentIndex = Math.max(0, odorBox.find(dish.odorLevel))
+        carbBox.currentIndex = comboIndexByValue(carbBox, dish.carbLevel)
+        fatBox.currentIndex = comboIndexByValue(fatBox, dish.fatLevel)
+        proteinBox.currentIndex = comboIndexByValue(proteinBox, dish.proteinLevel)
+        vitaminBox.currentIndex = comboIndexByValue(vitaminBox, dish.vitaminLevel)
+        fiberBox.currentIndex = comboIndexByValue(fiberBox, dish.fiberLevel)
+        satietyBox.currentIndex = comboIndexByValue(satietyBox, dish.satietyLevel)
+        burdenBox.currentIndex = comboIndexByValue(burdenBox, dish.digestiveBurdenLevel)
+        sleepinessBox.currentIndex = comboIndexByValue(sleepinessBox, dish.sleepinessRiskLevel)
+        flavorBox.currentIndex = comboIndexByValue(flavorBox, dish.flavorLevel)
+        odorBox.currentIndex = comboIndexByValue(odorBox, dish.odorLevel)
         comboCheck.checked = dish.isCombo
         beverageCheck.checked = dish.isBeverage
         dishNotesField.text = dish.notes
@@ -119,7 +177,7 @@ ScrollView {
                 editingMerchantId,
                 merchantNameField.text,
                 merchantAreaField.text,
-                merchantPriceLevelBox.currentText,
+                merchantPriceLevelBox.currentValue,
                 merchantDineInCheck.checked,
                 merchantTakeawayCheck.checked,
                 merchantDeliveryCheck.checked,
@@ -132,7 +190,7 @@ ScrollView {
             ok = foodManager.addMerchant(
                 merchantNameField.text,
                 merchantAreaField.text,
-                merchantPriceLevelBox.currentText,
+                merchantPriceLevelBox.currentValue,
                 merchantDineInCheck.checked,
                 merchantTakeawayCheck.checked,
                 merchantDeliveryCheck.checked,
@@ -156,19 +214,19 @@ ScrollView {
                 dishMerchantBox.currentValue,
                 dishCategoryField.text,
                 Number(dishPriceField.text || "0"),
-                dishDiningModeBox.currentText,
+                dishDiningModeBox.currentValue,
                 Number(dishEatTimeField.text || "0"),
                 Number(dishEffortField.text || "0"),
-                carbBox.currentText,
-                fatBox.currentText,
-                proteinBox.currentText,
-                vitaminBox.currentText,
-                fiberBox.currentText,
-                satietyBox.currentText,
-                burdenBox.currentText,
-                sleepinessBox.currentText,
-                flavorBox.currentText,
-                odorBox.currentText,
+                carbBox.currentValue,
+                fatBox.currentValue,
+                proteinBox.currentValue,
+                vitaminBox.currentValue,
+                fiberBox.currentValue,
+                satietyBox.currentValue,
+                burdenBox.currentValue,
+                sleepinessBox.currentValue,
+                flavorBox.currentValue,
+                odorBox.currentValue,
                 comboCheck.checked,
                 beverageCheck.checked,
                 Number(dishImpactField.text || "1"),
@@ -180,19 +238,19 @@ ScrollView {
                 dishMerchantBox.currentValue,
                 dishCategoryField.text,
                 Number(dishPriceField.text || "0"),
-                dishDiningModeBox.currentText,
+                dishDiningModeBox.currentValue,
                 Number(dishEatTimeField.text || "0"),
                 Number(dishEffortField.text || "0"),
-                carbBox.currentText,
-                fatBox.currentText,
-                proteinBox.currentText,
-                vitaminBox.currentText,
-                fiberBox.currentText,
-                satietyBox.currentText,
-                burdenBox.currentText,
-                sleepinessBox.currentText,
-                flavorBox.currentText,
-                odorBox.currentText,
+                carbBox.currentValue,
+                fatBox.currentValue,
+                proteinBox.currentValue,
+                vitaminBox.currentValue,
+                fiberBox.currentValue,
+                satietyBox.currentValue,
+                burdenBox.currentValue,
+                sleepinessBox.currentValue,
+                flavorBox.currentValue,
+                odorBox.currentValue,
                 comboCheck.checked,
                 beverageCheck.checked,
                 Number(dishImpactField.text || "1"),
@@ -211,9 +269,10 @@ ScrollView {
 
     ColumnLayout {
         width: root.availableWidth
+        height: implicitHeight
         spacing: 16
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 24
@@ -222,8 +281,10 @@ ScrollView {
             border.width: 1
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -244,7 +305,7 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Button {
+                    ReadableButton {
                         text: "刷新"
                         onClicked: {
                             foodManager.reload()
@@ -278,19 +339,22 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#e5efe6"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
+                    spacing: 8
 
                     Label {
                         text: editingMerchantId > 0 ? "编辑商家" : "新增商家"
@@ -299,7 +363,7 @@ ScrollView {
                         color: "#223126"
                     }
 
-                    Button {
+                    ReadableButton {
                         visible: editingMerchantId > 0
                         text: "取消"
                         onClicked: resetMerchantForm()
@@ -308,7 +372,7 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -327,7 +391,9 @@ ScrollView {
                     ComboBox {
                         id: merchantPriceLevelBox
                         Layout.fillWidth: true
-                        model: ["budget", "mid", "high"]
+                        model: root.priceLevelOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     TextField {
@@ -352,7 +418,7 @@ ScrollView {
                     }
                 }
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
                     spacing: 12
 
@@ -380,26 +446,29 @@ ScrollView {
                     wrapMode: TextEdit.Wrap
                 }
 
-                Button {
+                ReadableButton {
                     text: editingMerchantId > 0 ? "更新商家" : "保存商家"
                     onClicked: saveMerchant()
                 }
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#eef0df"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
+                    spacing: 8
 
                     Label {
                         text: editingDishId > 0 ? "编辑菜品" : "新增菜品"
@@ -408,7 +477,7 @@ ScrollView {
                         color: "#36391f"
                     }
 
-                    Button {
+                    ReadableButton {
                         visible: editingDishId > 0
                         text: "取消"
                         onClicked: resetDishForm()
@@ -423,7 +492,7 @@ ScrollView {
                     Repeater {
                         model: foodManager.frequentMerchants
 
-                        Button {
+                        ReadableButton {
                             text: "常用商家：" + modelData.name
                             onClicked: dishMerchantBox.currentIndex = merchantIndexForId(modelData.id)
                         }
@@ -432,7 +501,7 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -466,7 +535,9 @@ ScrollView {
                     ComboBox {
                         id: dishDiningModeBox
                         Layout.fillWidth: true
-                        model: ["dine_in", "takeaway", "delivery"]
+                        model: root.diningModeOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     TextField {
@@ -493,28 +564,30 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 3
+                    columns: root.narrowLayout ? 2 : 3
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    ComboBox { id: carbBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: fatBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: proteinBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: vitaminBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: fiberBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: satietyBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: burdenBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: sleepinessBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
-                    ComboBox { id: flavorBox; Layout.fillWidth: true; model: ["low", "medium", "high"] }
+                    ComboBox { id: carbBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: fatBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: proteinBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: vitaminBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: fiberBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: satietyBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: burdenBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: sleepinessBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
+                    ComboBox { id: flavorBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
                 }
 
                 ComboBox {
                     id: odorBox
                     Layout.fillWidth: true
-                    model: ["low", "medium", "high"]
+                    model: root.levelOptions
+                    textRole: "label"
+                    valueRole: "value"
                 }
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
                     spacing: 12
 
@@ -537,7 +610,7 @@ ScrollView {
                     wrapMode: TextEdit.Wrap
                 }
 
-                Button {
+                ReadableButton {
                     text: editingDishId > 0 ? "更新菜品" : "保存菜品"
                     enabled: foodManager.merchantCount > 0
                     onClicked: saveDish()
@@ -551,15 +624,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#ece4d8"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -579,7 +654,7 @@ ScrollView {
                 Repeater {
                     model: foodManager.filteredMerchants
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         Layout.fillWidth: true
                         radius: 14
                         color: "#fff8ef"
@@ -587,36 +662,47 @@ ScrollView {
                         border.width: 1
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
                             spacing: 6
 
-                            RowLayout {
+                            ColumnLayout {
                                 Layout.fillWidth: true
+                                spacing: 6
 
                                 Label {
                                     Layout.fillWidth: true
-                                    text: modelData.name + " | " + modelData.priceLevel
+                                    wrapMode: Text.Wrap
+                                    text: modelData.name + " | " + root.optionLabel(root.priceLevelOptions, modelData.priceLevel)
                                     font.bold: true
                                     color: "#2e241a"
                                 }
 
-                                Button {
-                                    text: "编辑"
-                                    onClicked: loadMerchantForEdit(modelData)
-                                }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 8
 
-                                Button {
-                                    text: "删除"
-                                    onClicked: {
-                                        if (foodManager.deleteMerchant(modelData.id) && editingMerchantId === modelData.id) {
-                                            resetMerchantForm()
+                                    ReadableButton {
+                                        text: "编辑"
+                                        onClicked: loadMerchantForEdit(modelData)
+                                    }
+
+                                    ReadableButton {
+                                        text: "删除"
+                                        onClicked: {
+                                            if (foodManager.deleteMerchant(modelData.id) && editingMerchantId === modelData.id) {
+                                                resetMerchantForm()
+                                            }
                                         }
                                     }
                                 }
                             }
 
                             Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
                                 text: "步行 " + modelData.distanceMinutes + " 分钟，排队 " + modelData.queueTimeMinutes + " 分钟，外卖约 " + modelData.deliveryEtaMinutes + " 分钟"
                                 color: "#5f4d3d"
                             }
@@ -646,15 +732,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#e3e9f1"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -666,11 +754,12 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
                     TextField {
+                        id: dishSearchField
                         Layout.fillWidth: true
                         placeholderText: "搜索菜品、商家、风险标签或用餐方式"
                         text: foodManager.dishSearch
@@ -688,8 +777,9 @@ ScrollView {
                     }
                 }
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
+                    spacing: 8
 
                     Label {
                         Layout.fillWidth: true
@@ -699,10 +789,14 @@ ScrollView {
                         color: "#5b6d84"
                     }
 
-                    Button {
+                    ReadableButton {
                         text: "清空筛选"
-                        visible: foodManager.dishMerchantFilterId > 0
-                        onClicked: foodManager.setDishMerchantFilterId(0)
+                        visible: foodManager.dishSearch.length > 0 || foodManager.dishMerchantFilterId > 0
+                        onClicked: {
+                            dishSearchField.text = ""
+                            foodManager.setDishSearch("")
+                            foodManager.setDishMerchantFilterId(0)
+                        }
                     }
                 }
 
@@ -714,7 +808,7 @@ ScrollView {
                     Repeater {
                         model: foodManager.frequentDishes
 
-                        Button {
+                        ReadableButton {
                             text: modelData.name
                             onClicked: loadDishForEdit(modelData)
                         }
@@ -724,7 +818,7 @@ ScrollView {
                 Repeater {
                     model: foodManager.filteredDishes
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         Layout.fillWidth: true
                         radius: 14
                         color: "#f8fbff"
@@ -732,12 +826,15 @@ ScrollView {
                         border.width: 1
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
                             spacing: 6
 
-                            RowLayout {
+                            ColumnLayout {
                                 Layout.fillWidth: true
+                                spacing: 6
 
                                 Label {
                                     Layout.fillWidth: true
@@ -747,33 +844,53 @@ ScrollView {
                                     color: "#243041"
                                 }
 
-                                Button {
-                                    text: "编辑"
-                                    onClicked: loadDishForEdit(modelData)
-                                }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 8
 
-                                Button {
-                                    text: "归档"
-                                    onClicked: {
-                                        if (foodManager.deleteDish(modelData.id) && editingDishId === modelData.id) {
-                                            resetDishForm()
+                                    ReadableButton {
+                                        text: "编辑"
+                                        onClicked: loadDishForEdit(modelData)
+                                    }
+
+                                    ReadableButton {
+                                        text: "归档"
+                                        onClicked: {
+                                            if (foodManager.deleteDish(modelData.id) && editingDishId === modelData.id) {
+                                                resetDishForm()
+                                            }
                                         }
                                     }
                                 }
                             }
 
                             Label {
-                                text: "分类 " + modelData.category + " | 价格 " + modelData.price + " | 方式 " + modelData.defaultDiningMode
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: "分类 " + modelData.category + " | 价格 " + modelData.price + " | 方式 " + root.optionLabel(root.diningModeOptions, modelData.defaultDiningMode)
                                 color: "#465a74"
                             }
 
                             Label {
-                                text: "碳/脂/蛋白/维生素/纤维：" + modelData.carbLevel + " / " + modelData.fatLevel + " / " + modelData.proteinLevel + " / " + modelData.vitaminLevel + " / " + modelData.fiberLevel
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: "碳/脂/蛋白/维生素/纤维："
+                                      + root.optionLabel(root.levelOptions, modelData.carbLevel) + " / "
+                                      + root.optionLabel(root.levelOptions, modelData.fatLevel) + " / "
+                                      + root.optionLabel(root.levelOptions, modelData.proteinLevel) + " / "
+                                      + root.optionLabel(root.levelOptions, modelData.vitaminLevel) + " / "
+                                      + root.optionLabel(root.levelOptions, modelData.fiberLevel)
                                 color: "#465a74"
                             }
 
                             Label {
-                                text: "饱腹 " + modelData.satietyLevel + "，负担 " + modelData.digestiveBurdenLevel + "，犯困 " + modelData.sleepinessRiskLevel + "，气味 " + modelData.odorLevel + "，权重 " + modelData.mealImpactWeight
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: "饱腹 " + root.optionLabel(root.levelOptions, modelData.satietyLevel)
+                                      + "，负担 " + root.optionLabel(root.levelOptions, modelData.digestiveBurdenLevel)
+                                      + "，犯困 " + root.optionLabel(root.levelOptions, modelData.sleepinessRiskLevel)
+                                      + "，气味 " + root.optionLabel(root.levelOptions, modelData.odorLevel)
+                                      + "，权重 " + modelData.mealImpactWeight
                                 color: "#465a74"
                             }
 

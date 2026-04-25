@@ -294,7 +294,7 @@ bool FoodManager::addMerchant(const QString &name,
     const QString normalizedPriceLevel = normalizedKey(priceLevel);
 
     if (name.trimmed().isEmpty()) {
-        m_lastError = QStringLiteral("Merchant name is required.");
+        m_lastError = QStringLiteral("商家名不能为空。");
         emit foodChanged();
         return false;
     }
@@ -302,19 +302,19 @@ bool FoodManager::addMerchant(const QString &name,
     if (!isOneOf(normalizedPriceLevel,
                  {QStringLiteral("budget"), QStringLiteral("mid"),
                   QStringLiteral("high")})) {
-        m_lastError = QStringLiteral("Merchant price level must be budget, mid, or high.");
+        m_lastError = QStringLiteral("商家价格档位只能是 budget、mid 或 high。");
         emit foodChanged();
         return false;
     }
 
     if (deliveryEtaMinutes < 0 || distanceMinutes < 0 || queueTimeMinutes < 0) {
-        m_lastError = QStringLiteral("Merchant timing fields cannot be negative.");
+        m_lastError = QStringLiteral("商家时间字段不能为负数。");
         emit foodChanged();
         return false;
     }
 
     if (!supportsDineIn && !supportsTakeaway && !supportsDelivery) {
-        m_lastError = QStringLiteral("Choose at least one supported dining mode.");
+        m_lastError = QStringLiteral("请至少选择一种支持的用餐方式。");
         emit foodChanged();
         return false;
     }
@@ -359,7 +359,7 @@ bool FoodManager::updateMerchant(int merchantId,
     const QString normalizedPriceLevel = normalizedKey(priceLevel);
 
     if (merchantId <= 0 || name.trimmed().isEmpty()) {
-        m_lastError = QStringLiteral("Valid merchant data is required.");
+        m_lastError = QStringLiteral("请填写有效的商家信息。");
         emit foodChanged();
         return false;
     }
@@ -367,19 +367,19 @@ bool FoodManager::updateMerchant(int merchantId,
     if (!isOneOf(normalizedPriceLevel,
                  {QStringLiteral("budget"), QStringLiteral("mid"),
                   QStringLiteral("high")})) {
-        m_lastError = QStringLiteral("Merchant price level must be budget, mid, or high.");
+        m_lastError = QStringLiteral("商家价格档位只能是 budget、mid 或 high。");
         emit foodChanged();
         return false;
     }
 
     if (deliveryEtaMinutes < 0 || distanceMinutes < 0 || queueTimeMinutes < 0) {
-        m_lastError = QStringLiteral("Merchant timing fields cannot be negative.");
+        m_lastError = QStringLiteral("商家时间字段不能为负数。");
         emit foodChanged();
         return false;
     }
 
     if (!supportsDineIn && !supportsTakeaway && !supportsDelivery) {
-        m_lastError = QStringLiteral("Choose at least one supported dining mode.");
+        m_lastError = QStringLiteral("请至少选择一种支持的用餐方式。");
         emit foodChanged();
         return false;
     }
@@ -401,7 +401,7 @@ bool FoodManager::updateMerchant(int merchantId,
     QString errorMessage;
     if (!repository.updateMerchant(merchant, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to update merchant.")
+                          ? QStringLiteral("更新商家失败。")
                           : errorMessage;
         emit foodChanged();
         return false;
@@ -418,7 +418,7 @@ bool FoodManager::deleteMerchant(int merchantId)
     QString errorMessage;
     if (!repository.deleteMerchant(merchantId, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to delete merchant.")
+                          ? QStringLiteral("删除商家失败。")
                           : errorMessage;
         emit foodChanged();
         return false;
@@ -469,13 +469,13 @@ bool FoodManager::addDish(const QString &name,
                                          QStringLiteral("high")};
 
     if (name.trimmed().isEmpty()) {
-        m_lastError = QStringLiteral("Dish name is required.");
+        m_lastError = QStringLiteral("菜品名不能为空。");
         emit foodChanged();
         return false;
     }
 
     if (merchantId <= 0) {
-        m_lastError = QStringLiteral("Please choose one merchant.");
+        m_lastError = QStringLiteral("请先选择一个商家。");
         emit foodChanged();
         return false;
     }
@@ -483,7 +483,7 @@ bool FoodManager::addDish(const QString &name,
     if (!isOneOf(normalizedDiningMode,
                  {QStringLiteral("dine_in"), QStringLiteral("takeaway"),
                   QStringLiteral("delivery")})) {
-        m_lastError = QStringLiteral("Dish dining mode must be dine_in, takeaway, or delivery.");
+        m_lastError = QStringLiteral("菜品默认用餐方式只能是 dine_in、takeaway 或 delivery。");
         emit foodChanged();
         return false;
     }
@@ -498,7 +498,7 @@ bool FoodManager::addDish(const QString &name,
         !allowedLevels.contains(normalizedSleepinessRiskLevel) ||
         !allowedLevels.contains(normalizedFlavorLevel) ||
         !allowedLevels.contains(normalizedOdorLevel)) {
-        m_lastError = QStringLiteral("Dish nutrition and tag levels must stay within low, medium, or high.");
+        m_lastError = QStringLiteral("菜品营养和标签等级只能是 low、medium 或 high。");
         emit foodChanged();
         return false;
     }
@@ -506,7 +506,7 @@ bool FoodManager::addDish(const QString &name,
     if (price < 0.0 || eatTimeMinutes <= 0 || eatTimeMinutes > 240 ||
         acquireEffortScore < 1 || acquireEffortScore > 3 ||
         mealImpactWeight <= 0.0 || mealImpactWeight > 3.0) {
-        m_lastError = QStringLiteral("Dish numeric fields are out of the supported range.");
+        m_lastError = QStringLiteral("菜品数值字段超出支持范围。");
         emit foodChanged();
         return false;
     }
@@ -589,7 +589,7 @@ bool FoodManager::updateDish(int dishId,
                                          QStringLiteral("high")};
 
     if (dishId <= 0 || name.trimmed().isEmpty() || merchantId <= 0) {
-        m_lastError = QStringLiteral("Valid dish data is required.");
+        m_lastError = QStringLiteral("请填写有效的菜品信息。");
         emit foodChanged();
         return false;
     }
@@ -597,7 +597,7 @@ bool FoodManager::updateDish(int dishId,
     if (!isOneOf(normalizedDiningMode,
                  {QStringLiteral("dine_in"), QStringLiteral("takeaway"),
                   QStringLiteral("delivery")})) {
-        m_lastError = QStringLiteral("Dish dining mode must be dine_in, takeaway, or delivery.");
+        m_lastError = QStringLiteral("菜品默认用餐方式只能是 dine_in、takeaway 或 delivery。");
         emit foodChanged();
         return false;
     }
@@ -612,7 +612,7 @@ bool FoodManager::updateDish(int dishId,
         !allowedLevels.contains(normalizedSleepinessRiskLevel) ||
         !allowedLevels.contains(normalizedFlavorLevel) ||
         !allowedLevels.contains(normalizedOdorLevel)) {
-        m_lastError = QStringLiteral("Dish nutrition and tag levels must stay within low, medium, or high.");
+        m_lastError = QStringLiteral("菜品营养和标签等级只能是 low、medium 或 high。");
         emit foodChanged();
         return false;
     }
@@ -620,7 +620,7 @@ bool FoodManager::updateDish(int dishId,
     if (price < 0.0 || eatTimeMinutes <= 0 || eatTimeMinutes > 240 ||
         acquireEffortScore < 1 || acquireEffortScore > 3 ||
         mealImpactWeight <= 0.0 || mealImpactWeight > 3.0) {
-        m_lastError = QStringLiteral("Dish numeric fields are out of the supported range.");
+        m_lastError = QStringLiteral("菜品数值字段超出支持范围。");
         emit foodChanged();
         return false;
     }
@@ -655,7 +655,7 @@ bool FoodManager::updateDish(int dishId,
     QString errorMessage;
     if (!repository.updateDish(dish, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to update dish.")
+                          ? QStringLiteral("更新菜品失败。")
                           : errorMessage;
         emit foodChanged();
         return false;
@@ -672,7 +672,7 @@ bool FoodManager::deleteDish(int dishId)
     QString errorMessage;
     if (!repository.archiveDish(dishId, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to archive dish.")
+                          ? QStringLiteral("归档菜品失败。")
                           : errorMessage;
         emit foodChanged();
         return false;

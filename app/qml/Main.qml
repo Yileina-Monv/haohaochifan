@@ -3,10 +3,29 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 ApplicationWindow {
+    component AutoHeightRectangle: Rectangle {
+        Layout.preferredHeight: implicitHeight
+        implicitHeight: childrenRect.height > 0
+                        ? childrenRect.y + childrenRect.height + childrenRect.y
+                        : 0
+    }
+    component ReadableButton: Button {
+        id: readableButton
+
+        contentItem: Label {
+            text: readableButton.text
+            color: readableButton.enabled ? "#2c241b" : "#8a8176"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
     id: window
 
     width: 420
     height: 800
+    minimumWidth: 320
+    minimumHeight: 560
     visible: true
     title: "MealAdvisor"
 
@@ -71,7 +90,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 8
 
-                Button {
+                ReadableButton {
                     text: "保存"
                     onClicked: {
                         appConfig.saveLlmSettings(apiKeyField.text,
@@ -81,7 +100,7 @@ ApplicationWindow {
                     }
                 }
 
-                Button {
+                ReadableButton {
                     text: "清空本地配置"
                     onClicked: {
                         appConfig.clearLlmSettings()
@@ -89,7 +108,7 @@ ApplicationWindow {
                     }
                 }
 
-                Button {
+                ReadableButton {
                     text: "关闭"
                     onClicked: llmConfigDialog.close()
                 }
@@ -103,18 +122,22 @@ ApplicationWindow {
         currentIndex: swipeView.currentIndex
 
         TabButton {
+            width: tabBar.width / 4
             text: "首页"
         }
 
         TabButton {
+            width: tabBar.width / 4
             text: "课表"
         }
 
         TabButton {
+            width: tabBar.width / 4
             text: "食物"
         }
 
         TabButton {
+            width: tabBar.width / 4
             text: "餐次"
         }
     }
@@ -129,10 +152,11 @@ ApplicationWindow {
             clip: true
 
             ColumnLayout {
-                width: parent.width
+                width: swipeView.width
+                height: implicitHeight
                 spacing: 16
 
-                Rectangle {
+                AutoHeightRectangle {
                     Layout.fillWidth: true
                     Layout.margins: 16
                     radius: 24
@@ -141,8 +165,10 @@ ApplicationWindow {
                     border.width: 1
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 20
+                        x: 20
+                        y: 20
+                        width: parent.width - 20 * 2
+                        height: implicitHeight
                         spacing: 12
 
                         Label {
@@ -159,7 +185,7 @@ ApplicationWindow {
                             color: "#4f4336"
                         }
 
-                        Rectangle {
+                        AutoHeightRectangle {
                             Layout.fillWidth: true
                             radius: 18
                             color: "#f7f1e7"
@@ -167,8 +193,10 @@ ApplicationWindow {
                             border.width: 1
 
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 14
+                                x: 14
+                                y: 14
+                                width: parent.width - 14 * 2
+                                height: implicitHeight
                                 spacing: 10
 
                                 Label {
@@ -188,11 +216,11 @@ ApplicationWindow {
                                     color: recommendationEngine.apiConfigured ? "#5d4c3e" : "#8f4b34"
                                 }
 
-                                RowLayout {
+                                Flow {
                                     Layout.fillWidth: true
                                     spacing: 8
 
-                                    Rectangle {
+                                    AutoHeightRectangle {
                                         radius: 10
                                         color: recommendationEngine.supplementState === "success"
                                                ? "#d8ead2"
@@ -228,7 +256,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle {
+                                    AutoHeightRectangle {
                                         visible: recommendationEngine.supplementFallbackActive
                                         radius: 10
                                         color: "#f5d5cd"
@@ -245,11 +273,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Item {
-                                        Layout.fillWidth: true
-                                    }
-
-                                    Button {
+                                    ReadableButton {
                                         text: "LLM 配置"
                                         enabled: !recommendationEngine.busy
                                         onClicked: llmConfigDialog.open()
@@ -285,13 +309,13 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     spacing: 12
 
-                                    Button {
+                                    ReadableButton {
                                         text: recommendationEngine.busy ? "解析中..." : "解析补充说明"
                                         enabled: appConfig.llmApiConfigured && !recommendationEngine.busy
                                         onClicked: recommendationEngine.parseSupplement(supplementInput.text)
                                     }
 
-                                    Button {
+                                    ReadableButton {
                                         text: "清空补充说明"
                                         enabled: !recommendationEngine.busy
                                         onClicked: recommendationEngine.clearSupplement()
@@ -312,7 +336,7 @@ ApplicationWindow {
                                     Repeater {
                                         model: recommendationEngine.supplementWeights
 
-                                        Rectangle {
+                                        AutoHeightRectangle {
                                             radius: 12
                                             color: "#efe5d7"
                                             border.color: "#d6c5b4"
@@ -332,7 +356,7 @@ ApplicationWindow {
                             }
                         }
 
-                        Button {
+                        ReadableButton {
                             text: "生成推荐"
                             enabled: !recommendationEngine.busy
                             onClicked: recommendationEngine.runDecision()
@@ -341,7 +365,7 @@ ApplicationWindow {
                         Repeater {
                             model: recommendationEngine.candidates
 
-                            Rectangle {
+                            AutoHeightRectangle {
                                 Layout.fillWidth: true
                                 radius: 16
                                 color: "#f6efe2"
@@ -349,8 +373,10 @@ ApplicationWindow {
                                 border.width: 1
 
                                 ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 14
+                                    x: 14
+                                    y: 14
+                                    width: parent.width - 14 * 2
+                                    height: implicitHeight
                                     spacing: 6
 
                                     Label {
@@ -397,7 +423,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle {
+                                    AutoHeightRectangle {
                                         visible: modelData.warnings && modelData.warnings.length > 0
                                         Layout.fillWidth: true
                                         radius: 12
@@ -406,8 +432,10 @@ ApplicationWindow {
                                         border.width: 1
 
                                         ColumnLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 10
+                                            x: 10
+                                            y: 10
+                                            width: parent.width - 10 * 2
+                                            height: implicitHeight
                                             spacing: 4
 
                                             Label {
@@ -447,7 +475,7 @@ ApplicationWindow {
                                             Repeater {
                                                 model: modelData.breakdown
 
-                                                Rectangle {
+                                                AutoHeightRectangle {
                                                     radius: 12
                                                     color: "#eee4d6"
                                                     border.color: "#d3c3ad"
@@ -479,15 +507,17 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle {
+                AutoHeightRectangle {
                     Layout.fillWidth: true
                     Layout.margins: 16
                     radius: 20
                     color: "#e6efe2"
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 20
+                        x: 20
+                        y: 20
+                        width: parent.width - 20 * 2
+                        height: implicitHeight
                         spacing: 8
 
                         Label {
@@ -519,15 +549,17 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle {
+                AutoHeightRectangle {
                     Layout.fillWidth: true
                     Layout.margins: 16
                     radius: 20
                     color: "#efe4d2"
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 20
+                        x: 20
+                        y: 20
+                        width: parent.width - 20 * 2
+                        height: implicitHeight
                         spacing: 8
 
                         Label {

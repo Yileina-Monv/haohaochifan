@@ -79,7 +79,7 @@ QStringList planningPolicySeedStatements()
         QStringLiteral(
             "INSERT OR IGNORE INTO planning_policies "
             "(id, name, enabled_weekdays, include_commute_days, skip_non_enabled_days, default_daily_budget, flexible_budget_cap, breakfast_recommendation_enabled, created_at, updated_at) "
-            "VALUES (1, 'Default Campus Plan', '2,3,4,5', 1, 1, 80, 120, 0, datetime('now'), datetime('now'))")
+            "VALUES (1, '默认校园规划', '2,3,4,5', 1, 1, 80, 120, 0, datetime('now'), datetime('now'))")
     };
 }
 
@@ -89,11 +89,11 @@ QStringList recommendationProfileSeedStatements()
         QStringLiteral(
             "INSERT OR IGNORE INTO recommendation_profiles "
             "(id, name, has_class_priority, health_priority, budget_priority, time_effort_priority, satiety_priority, carb_control_priority, fat_control_priority, protein_priority, sleepiness_avoid_priority, breakfast_recommendation_enabled, enabled_weekdays, planning_scope, is_default, created_at, updated_at) "
-            "VALUES (1, 'Class Day', 1, 7, 4, 9, 6, 9, 7, 6, 10, 0, '2,3,4,5', 'class_day', 1, datetime('now'), datetime('now'))"),
+            "VALUES (1, '有课日', 1, 7, 4, 9, 6, 9, 7, 6, 10, 0, '2,3,4,5', 'class_day', 1, datetime('now'), datetime('now'))"),
         QStringLiteral(
             "INSERT OR IGNORE INTO recommendation_profiles "
             "(id, name, has_class_priority, health_priority, budget_priority, time_effort_priority, satiety_priority, carb_control_priority, fat_control_priority, protein_priority, sleepiness_avoid_priority, breakfast_recommendation_enabled, enabled_weekdays, planning_scope, is_default, created_at, updated_at) "
-            "VALUES (2, 'Commute Day', 1, 8, 4, 8, 7, 8, 7, 6, 9, 0, '2,5', 'commute_day', 0, datetime('now'), datetime('now'))")
+            "VALUES (2, '通勤日', 1, 8, 4, 8, 7, 8, 7, 6, 9, 0, '2,5', 'commute_day', 0, datetime('now'), datetime('now'))")
     };
 }
 }

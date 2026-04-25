@@ -836,7 +836,7 @@ int main(int argc, char *argv[])
         QStringLiteral("测试"), QStringLiteral("invalid datetime"));
     addResult(&results, QStringLiteral("Meal guardrail blocks invalid datetime"),
               invalidDatetimeBlocked &&
-                  mealLogManager.lastError().contains(QStringLiteral("valid meal time")),
+                  mealLogManager.lastError().contains(QStringLiteral("有效的用餐时间")),
               mealLogManager.lastError());
 
     mealLogManager.clearSelection();
@@ -849,7 +849,7 @@ int main(int argc, char *argv[])
     addResult(&results,
               QStringLiteral("Meal guardrail blocks class-after-meal with nonpositive minutes"),
               invalidMinutesBlocked &&
-                  mealLogManager.lastError().contains(QStringLiteral("greater than 0")),
+                  mealLogManager.lastError().contains(QStringLiteral("必须大于 0")),
               mealLogManager.lastError());
     mealLogManager.clearSelection();
 
@@ -869,7 +869,7 @@ int main(int argc, char *argv[])
                                  1, QString());
     addResult(&results, QStringLiteral("Merchant validation rejects invalid price level"),
               invalidMerchantRejected &&
-                  foodManager.lastError().contains(QStringLiteral("budget, mid, or high")),
+                  foodManager.lastError().contains(QStringLiteral("budget、mid 或 high")),
               foodManager.lastError());
 
     const bool invalidDishRejected = !foodManager.addDish(
@@ -882,7 +882,7 @@ int main(int argc, char *argv[])
         QString());
     addResult(&results, QStringLiteral("Dish validation rejects invalid numeric range"),
               invalidDishRejected &&
-                  foodManager.lastError().contains(QStringLiteral("supported range")),
+                  foodManager.lastError().contains(QStringLiteral("超出支持范围")),
               foodManager.lastError());
 
     foodManager.setDishSearch(QStringLiteral("拉面"));

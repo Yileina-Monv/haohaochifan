@@ -505,10 +505,10 @@ QString contextSummary(const MealContext &context)
                           weekdayLabel(context.weekday)));
     parts.append(context.mealLabel);
     if (context.hasClassAfterMeal && context.minutesUntilNextClass > 0) {
-        parts.append(QStringLiteral("next class in %1 minutes")
+        parts.append(QStringLiteral("距离下节课 %1 分钟")
                          .arg(context.minutesUntilNextClass));
     } else {
-        parts.append(QStringLiteral("no near class constraint"));
+        parts.append(QStringLiteral("近期没有上课约束"));
     }
     return parts.join(QStringLiteral(", "));
 }
@@ -632,7 +632,7 @@ PlanningPolicy defaultPolicy(const QList<PlanningPolicy> &policies)
     }
 
     PlanningPolicy policy;
-    policy.name = QStringLiteral("Fallback Campus Plan");
+    policy.name = QStringLiteral("默认校园规划");
     policy.enabledWeekdays = {2, 3, 4, 5};
     policy.includeCommuteDays = true;
     policy.skipNonEnabledDays = true;
@@ -664,7 +664,7 @@ RecommendationProfile selectProfile(const QList<RecommendationProfile> &profiles
     }
 
     RecommendationProfile fallback;
-    fallback.name = QStringLiteral("Fallback Profile");
+    fallback.name = QStringLiteral("默认推荐策略");
     fallback.healthPriority = 8;
     fallback.budgetPriority = 4;
     fallback.timeEffortPriority = 7;
@@ -1242,7 +1242,7 @@ bool validateExactKeys(const QJsonObject &object,
 {
     if (object.keys().size() != expectedKeys.size()) {
         if (error != nullptr) {
-            *error = QStringLiteral("unexpected key count");
+            *error = QStringLiteral("字段数量不符合约定");
         }
         return false;
     }
@@ -1250,7 +1250,7 @@ bool validateExactKeys(const QJsonObject &object,
     for (const QString &expectedKey : expectedKeys) {
         if (!object.contains(expectedKey)) {
             if (error != nullptr) {
-                *error = QStringLiteral("missing key: %1").arg(expectedKey);
+                *error = QStringLiteral("缺少字段：%1").arg(expectedKey);
             }
             return false;
         }
@@ -1259,7 +1259,7 @@ bool validateExactKeys(const QJsonObject &object,
     for (const QString &actualKey : object.keys()) {
         if (!expectedKeys.contains(actualKey)) {
             if (error != nullptr) {
-                *error = QStringLiteral("extra key: %1").arg(actualKey);
+                *error = QStringLiteral("存在额外字段：%1").arg(actualKey);
             }
             return false;
         }
@@ -1275,7 +1275,7 @@ bool extractContractObjectFromApiResponse(const QByteArray &payload,
     QJsonObject rootObject;
     if (!parseStrictJsonObject(payload, &rootObject)) {
         if (error != nullptr) {
-            *error = QStringLiteral("response body is not JSON");
+            *error = QStringLiteral("响应正文不是 JSON");
         }
         return false;
     }
@@ -1312,7 +1312,7 @@ bool extractContractObjectFromApiResponse(const QByteArray &payload,
         }
 
         if (error != nullptr) {
-            *error = QStringLiteral("message content is not strict JSON");
+            *error = QStringLiteral("消息内容不是严格 JSON");
         }
         return false;
     }
@@ -1335,13 +1335,13 @@ bool extractContractObjectFromApiResponse(const QByteArray &payload,
             }
         }
         if (error != nullptr) {
-            *error = QStringLiteral("output content is not strict JSON");
+            *error = QStringLiteral("输出内容不是严格 JSON");
         }
         return false;
     }
 
     if (error != nullptr) {
-        *error = QStringLiteral("response does not contain a chat completion message");
+        *error = QStringLiteral("响应中没有可用的 chat completion 消息");
     }
     return false;
 }
@@ -1355,7 +1355,7 @@ bool readAllowedDouble(const QJsonObject &object,
     const QJsonValue jsonValue = object.value(key);
     if (!jsonValue.isDouble()) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 must be a number").arg(key);
+        *error = QStringLiteral("%1 必须是数字").arg(key);
         }
         return false;
     }
@@ -1363,7 +1363,7 @@ bool readAllowedDouble(const QJsonObject &object,
     const double parsedValue = jsonValue.toDouble();
     if (!containsAllowedValue(parsedValue, allowedValues)) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        *error = QStringLiteral("%1 的取值不受支持").arg(key);
         }
         return false;
     }
@@ -1383,7 +1383,7 @@ bool readAllowedInt(const QJsonObject &object,
     const QJsonValue jsonValue = object.value(key);
     if (!jsonValue.isDouble()) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 must be an integer").arg(key);
+        *error = QStringLiteral("%1 必须是整数").arg(key);
         }
         return false;
     }
@@ -1392,14 +1392,14 @@ bool readAllowedInt(const QJsonObject &object,
     const int parsedValue = static_cast<int>(std::round(parsedDouble));
     if (!nearlyEqual(parsedDouble, parsedValue)) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 must be an integer").arg(key);
+        *error = QStringLiteral("%1 必须是整数").arg(key);
         }
         return false;
     }
 
     if (!containsAllowedInt(parsedValue, allowedValues)) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        *error = QStringLiteral("%1 的取值不受支持").arg(key);
         }
         return false;
     }
@@ -1419,7 +1419,7 @@ bool readAllowedString(const QJsonObject &object,
     const QJsonValue jsonValue = object.value(key);
     if (!jsonValue.isString()) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 must be a string").arg(key);
+        *error = QStringLiteral("%1 必须是字符串").arg(key);
         }
         return false;
     }
@@ -1427,7 +1427,7 @@ bool readAllowedString(const QJsonObject &object,
     const QString parsedValue = jsonValue.toString().trimmed();
     if (!allowedValues.contains(parsedValue)) {
         if (error != nullptr) {
-            *error = QStringLiteral("%1 has an unsupported value").arg(key);
+        *error = QStringLiteral("%1 的取值不受支持").arg(key);
         }
         return false;
     }
@@ -1822,7 +1822,7 @@ void RecommendationEngine::runDecision()
     m_candidates.clear();
 
     if (dishes.isEmpty()) {
-        m_summary = QStringLiteral("当前没有可用菜品，请先录入 active dishes。");
+        m_summary = QStringLiteral("当前没有可用菜品，请先在 Food 页面录入启用菜品。");
         emit recommendationsChanged();
         return;
     }
@@ -2602,7 +2602,7 @@ void RecommendationEngine::setBusy(bool busy)
 
 void RecommendationEngine::setInitialState()
 {
-    m_summary = QStringLiteral("点击“Judge Recommendation”后会按当前时间窗口运行 V2 推荐。");
+    m_summary = QStringLiteral("点击“生成推荐”后会按当前时间窗口运行 V2 推荐。");
     m_supplementSummary = QStringLiteral("当前没有补充说明。");
     m_supplementStatus = apiConfigured()
                              ? QStringLiteral("补充说明解析器已就绪。")
@@ -2922,7 +2922,7 @@ void RecommendationEngine::setInitialState()
 {
     m_adjustment = neutralSupplementAdjustment();
     m_adjustment.hasParsed = false;
-    m_summary = QStringLiteral("点击 “Judge Recommendation” 后会按当前时间窗口运行 V2 推荐。");
+    m_summary = QStringLiteral("点击“生成推荐”后会按当前时间窗口运行 V2 推荐。");
     m_supplementSummary = QStringLiteral("当前没有补充说明。");
     m_supplementStatus = apiConfigured()
                              ? QStringLiteral("补充说明解析器已就绪。")

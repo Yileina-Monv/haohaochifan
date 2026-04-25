@@ -2200,7 +2200,7 @@ bool MealLogManager::addSelectedDish(int dishId,
                                      const QString &customNotes)
 {
     if (dishId <= 0) {
-        m_lastError = QStringLiteral("Please select one dish.");
+        m_lastError = QStringLiteral("请先选择一道菜。");
         emit stateChanged();
         return false;
     }
@@ -2215,7 +2215,7 @@ bool MealLogManager::addSelectedDish(int dishId,
     }
 
     if (dishToAdd.isEmpty()) {
-        m_lastError = QStringLiteral("Dish not found.");
+        m_lastError = QStringLiteral("没有找到这道菜。");
         emit stateChanged();
         return false;
     }
@@ -2253,7 +2253,7 @@ QVariantMap MealLogManager::loadMealLogForEdit(int mealLogId)
 {
     QVariantMap result;
     if (mealLogId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid meal log.");
+        m_lastError = QStringLiteral("请选择有效的餐次记录。");
         emit stateChanged();
         return result;
     }
@@ -2261,7 +2261,7 @@ QVariantMap MealLogManager::loadMealLogForEdit(int mealLogId)
     MealLogRepository repository(m_databaseManager.connectionName());
     const MealLog mealLog = repository.loadMealLog(mealLogId);
     if (mealLog.id <= 0) {
-        m_lastError = QStringLiteral("Meal log not found.");
+        m_lastError = QStringLiteral("没有找到这条餐次记录。");
         emit stateChanged();
         return result;
     }
@@ -2312,7 +2312,7 @@ void MealLogManager::cancelEditingMealLog()
 bool MealLogManager::deleteMealLog(int mealLogId)
 {
     if (mealLogId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid meal log.");
+        m_lastError = QStringLiteral("请选择有效的餐次记录。");
         emit stateChanged();
         return false;
     }
@@ -2321,7 +2321,7 @@ bool MealLogManager::deleteMealLog(int mealLogId)
     QString errorMessage;
     if (!repository.deleteMealLog(mealLogId, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to delete meal log.")
+                          ? QStringLiteral("删除餐次记录失败。")
                           : errorMessage;
         emit stateChanged();
         return false;
@@ -2341,7 +2341,7 @@ QVariantMap MealLogManager::loadMealFeedback(int mealLogId)
 {
     QVariantMap result;
     if (mealLogId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid meal log.");
+        m_lastError = QStringLiteral("请选择有效的餐次记录。");
         emit stateChanged();
         return result;
     }
@@ -2381,7 +2381,7 @@ bool MealLogManager::saveMealFeedback(int mealLogId,
                                       const QString &freeTextFeedback)
 {
     if (mealLogId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid meal log.");
+        m_lastError = QStringLiteral("请选择有效的餐次记录。");
         emit stateChanged();
         return false;
     }
@@ -2393,7 +2393,7 @@ bool MealLogManager::saveMealFeedback(int mealLogId,
     if (!isValidScore(fullnessLevel) || !isValidScore(sleepinessLevel) ||
         !isValidScore(comfortLevel) || !isValidScore(focusImpactLevel) ||
         !isValidScore(tasteRating) || !isValidScore(repeatWillingness)) {
-        m_lastError = QStringLiteral("Feedback scores must stay within 1 to 5.");
+        m_lastError = QStringLiteral("餐后反馈分数必须在 1 到 5 之间。");
         emit stateChanged();
         return false;
     }
@@ -2418,7 +2418,7 @@ bool MealLogManager::saveMealFeedback(int mealLogId,
     QString errorMessage;
     if (!repository.upsertFeedback(feedback, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to save meal feedback.")
+                          ? QStringLiteral("保存餐后反馈失败。")
                           : errorMessage;
         emit stateChanged();
         return false;
@@ -2465,56 +2465,56 @@ bool MealLogManager::saveMealLog(const QString &mealType,
     };
 
     if (mealType.trimmed().isEmpty()) {
-        m_lastError = QStringLiteral("Meal type is required.");
+        m_lastError = QStringLiteral("餐次类型不能为空。");
         emit stateChanged();
         return false;
     }
 
     if (!isValidMealType(mealType.trimmed())) {
-        m_lastError = QStringLiteral("Meal type is invalid.");
+        m_lastError = QStringLiteral("餐次类型无效。");
         emit stateChanged();
         return false;
     }
 
     if (m_selectedDishes.isEmpty()) {
-        m_lastError = QStringLiteral("Add at least one dish to this meal.");
+        m_lastError = QStringLiteral("请至少给这餐添加一道菜。");
         emit stateChanged();
         return false;
     }
 
     if (totalPrice < 0.0 || totalEatTimeMinutes < 0 || minutesUntilNextClass < 0) {
-        m_lastError = QStringLiteral("Numeric fields cannot be negative.");
+        m_lastError = QStringLiteral("数值字段不能为负数。");
         emit stateChanged();
         return false;
     }
 
     if (weekday < 1 || weekday > 7) {
-        m_lastError = QStringLiteral("Weekday must stay within 1 to 7.");
+        m_lastError = QStringLiteral("星期必须在 1 到 7 之间。");
         emit stateChanged();
         return false;
     }
 
     if (!isValidLocationType(locationType.trimmed())) {
-        m_lastError = QStringLiteral("Location type is invalid.");
+        m_lastError = QStringLiteral("地点类型无效。");
         emit stateChanged();
         return false;
     }
 
     if (!isValidDiningMode(diningMode.trimmed())) {
-        m_lastError = QStringLiteral("Dining mode is invalid.");
+        m_lastError = QStringLiteral("用餐方式无效。");
         emit stateChanged();
         return false;
     }
 
     if (!isValidMoodLevel(preMealHungerLevel) ||
         !isValidMoodLevel(preMealEnergyLevel)) {
-        m_lastError = QStringLiteral("Pre-meal hunger and energy must stay within 1 to 5.");
+        m_lastError = QStringLiteral("餐前饥饿和精力分数必须在 1 到 5 之间。");
         emit stateChanged();
         return false;
     }
 
     if (hasClassAfterMeal && minutesUntilNextClass <= 0) {
-        m_lastError = QStringLiteral("If you mark class after meal, minutes until next class must be greater than 0.");
+        m_lastError = QStringLiteral("勾选餐后有课时，距离下节课分钟数必须大于 0。");
         emit stateChanged();
         return false;
     }
@@ -2529,7 +2529,7 @@ bool MealLogManager::saveMealLog(const QString &mealType,
     if (!strictIsoPattern.match(trimmedEatenAt).hasMatch() ||
         !mealLog.eatenAt.isValid() ||
         mealLog.eatenAt.toString(Qt::ISODate) != trimmedEatenAt) {
-        m_lastError = QStringLiteral("Use a valid meal time such as 2026-04-22T12:30:00.");
+        m_lastError = QStringLiteral("请使用有效的用餐时间，例如 2026-04-22T12:30:00。");
         emit stateChanged();
         return false;
     }
@@ -2553,7 +2553,7 @@ bool MealLogManager::saveMealLog(const QString &mealType,
         item.portionRatio = dishMap.value(QStringLiteral("portionRatio")).toDouble();
         item.customNotes = dishMap.value(QStringLiteral("customNotes")).toString().trimmed();
         if (item.dishId <= 0 || item.portionRatio <= 0.0) {
-            m_lastError = QStringLiteral("Each selected dish must keep a valid id and positive weight.");
+            m_lastError = QStringLiteral("每道已选菜都必须保留有效 ID 和正数权重。");
             emit stateChanged();
             return false;
         }
@@ -2569,7 +2569,7 @@ bool MealLogManager::saveMealLog(const QString &mealType,
                                                 &errorMessage);
     if (!ok) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to save meal log.")
+                          ? QStringLiteral("保存餐次记录失败。")
                           : errorMessage;
         emit stateChanged();
         return false;

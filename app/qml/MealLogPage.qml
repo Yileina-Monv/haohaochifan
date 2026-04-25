@@ -1,10 +1,28 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
 ScrollView {
+    component AutoHeightRectangle: Rectangle {
+        Layout.preferredHeight: implicitHeight
+        implicitHeight: childrenRect.height > 0
+                        ? childrenRect.y + childrenRect.height + childrenRect.y
+                        : 0
+    }
+    component ReadableButton: Button {
+        id: readableButton
+
+        contentItem: Label {
+            text: readableButton.text
+            color: readableButton.enabled ? "#2c241b" : "#8a8176"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
     id: root
     clip: true
+    readonly property bool narrowLayout: root.availableWidth < 380
     property int selectedInsightIndex: -1
     property var mealTypeOptions: [
         { label: "早餐", value: "breakfast" },
@@ -363,9 +381,10 @@ ScrollView {
 
     ColumnLayout {
         width: root.availableWidth
+        height: implicitHeight
         spacing: 16
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 24
@@ -374,8 +393,10 @@ ScrollView {
             border.width: 1
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -392,10 +413,11 @@ ScrollView {
                     color: "#5a4a3b"
                 }
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
+                    spacing: 8
 
-                    Button {
+                    ReadableButton {
                         text: "刷新"
                         onClicked: {
                             mealLogManager.reload()
@@ -403,7 +425,7 @@ ScrollView {
                         }
                     }
 
-                    Button {
+                    ReadableButton {
                         visible: mealLogManager.editingMealLogId > 0
                         text: "取消编辑"
                         onClicked: resetEditor()
@@ -420,7 +442,7 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
@@ -428,8 +450,10 @@ ScrollView {
             visible: mealLogManager.recentMeals.length > 0
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
                 Label {
@@ -449,7 +473,7 @@ ScrollView {
                 Repeater {
                     model: mealLogManager.recentMeals
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         Layout.fillWidth: true
                         visible: index < 4
                         radius: 14
@@ -458,26 +482,30 @@ ScrollView {
                         border.width: 1
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
                             spacing: 6
 
-                            RowLayout {
+                            Label {
                                 Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
+                                font.bold: true
+                                color: "#2e241a"
+                            }
 
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
-                                    font.bold: true
-                                    color: "#2e241a"
-                                }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 8
 
-                                Button {
+                                ReadableButton {
                                     text: "复用这餐"
                                     onClicked: applyMealTemplate(modelData, false)
                                 }
 
-                                Button {
+                                ReadableButton {
                                     text: "只加菜品"
                                     onClicked: applyMealTemplate(modelData, true)
                                 }
@@ -505,15 +533,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#e6efe4"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
                 Label {
@@ -532,7 +562,7 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -659,15 +689,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#eef0df"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
                 Label {
@@ -703,6 +735,16 @@ ScrollView {
                     color: "#617047"
                 }
 
+                ReadableButton {
+                    text: "清空搜索"
+                    visible: dishSearchField.text.length > 0
+                    onClicked: {
+                        dishSearchField.text = ""
+                        mealLogManager.setDishSearch("")
+                        dishPicker.currentIndex = 0
+                    }
+                }
+
                 Flow {
                     Layout.fillWidth: true
                     spacing: 8
@@ -711,7 +753,7 @@ ScrollView {
                     Repeater {
                         model: mealLogManager.frequentDishes
 
-                        Button {
+                        ReadableButton {
                             text: modelData.name
                             onClicked: addPickedDish(modelData)
                         }
@@ -720,7 +762,7 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -746,7 +788,7 @@ ScrollView {
                     placeholderText: "这道菜的备注（可留空）"
                 }
 
-                Button {
+                ReadableButton {
                     text: "加入本餐"
                     enabled: mealLogManager.filteredAvailableDishes.length > 0
                     onClicked: {
@@ -765,19 +807,22 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#e4eaf1"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
+                    spacing: 8
 
                     Label {
                         text: "已选菜品"
@@ -786,7 +831,7 @@ ScrollView {
                         color: "#243041"
                     }
 
-                    Button {
+                    ReadableButton {
                         text: "清空"
                         onClicked: mealLogManager.clearSelection()
                     }
@@ -795,7 +840,7 @@ ScrollView {
                 Repeater {
                     model: mealLogManager.selectedDishes
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         id: mealCard
                         Layout.fillWidth: true
                         radius: 14
@@ -803,16 +848,20 @@ ScrollView {
                         border.color: "#c7d3e2"
                         border.width: 1
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 12
+                        ColumnLayout {
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
+                            spacing: 8
 
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 4
 
                                 Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
                                     text: modelData.name + " | " + modelData.merchantName
                                     font.bold: true
                                     color: "#243041"
@@ -832,17 +881,21 @@ ScrollView {
                                 }
                             }
 
-                            Button {
-                                text: "移除"
-                                onClicked: mealLogManager.removeSelectedDish(index)
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                ReadableButton {
+                                    text: "移除"
+                                    onClicked: mealLogManager.removeSelectedDish(index)
+                                }
                             }
                         }
                     }
                 }
 
-                Button {
+                ReadableButton {
                     text: mealLogManager.editingMealLogId > 0 ? "更新餐次" : "保存餐次"
-                    enabled: mealLogManager.selectedDishes.length > 0
                     onClicked: {
                         const ok = mealLogManager.saveMealLog(
                             mealTypeBox.currentValue,
@@ -869,7 +922,7 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
@@ -877,8 +930,10 @@ ScrollView {
             visible: mealLogManager.feedbackInsights.length > 0
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -898,7 +953,7 @@ ScrollView {
                 Repeater {
                     model: mealLogManager.feedbackInsights
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         property bool selected: index === root.selectedInsightIndex
                         Layout.fillWidth: true
                         radius: 14
@@ -907,15 +962,19 @@ ScrollView {
                         border.width: selected ? 2 : 1
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
                             spacing: 6
 
-                            RowLayout {
+                            ColumnLayout {
                                 Layout.fillWidth: true
+                                spacing: 4
 
                                 Label {
                                     Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
                                     text: modelData.title
                                     font.bold: true
                                     color: "#2e241a"
@@ -923,6 +982,8 @@ ScrollView {
 
                                 Label {
                                     visible: modelData.weightHintCount > 0
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
                                     text: modelData.weightHintCount + " 条调权建议"
                                     color: "#6d593b"
                                 }
@@ -967,7 +1028,7 @@ ScrollView {
                     }
                 }
 
-                Rectangle {
+                AutoHeightRectangle {
                     Layout.fillWidth: true
                     radius: 16
                     visible: root.currentInsight() !== null
@@ -976,8 +1037,10 @@ ScrollView {
                     border.width: 1
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
+                        x: 16
+                        y: 16
+                        width: parent.width - 16 * 2
+                        height: implicitHeight
                         spacing: 12
 
                         Label {
@@ -988,7 +1051,7 @@ ScrollView {
                             color: "#2e241a"
                         }
 
-                        Rectangle {
+                        AutoHeightRectangle {
                             Layout.fillWidth: true
                             visible: root.currentInsight() !== null
                             radius: 12
@@ -997,8 +1060,10 @@ ScrollView {
                             border.width: 1
 
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
+                                x: 10
+                                y: 10
+                                width: parent.width - 10 * 2
+                                height: implicitHeight
                                 spacing: 4
 
                                 Label {
@@ -1028,7 +1093,7 @@ ScrollView {
                             }
                         }
 
-                        Rectangle {
+                        AutoHeightRectangle {
                             Layout.fillWidth: true
                             visible: root.currentInsight()
                                      && root.currentInsight().firstScanStepTitle
@@ -1039,8 +1104,10 @@ ScrollView {
                             border.width: 1
 
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
+                                x: 10
+                                y: 10
+                                width: parent.width - 10 * 2
+                                height: implicitHeight
                                 spacing: 5
 
                                 Label {
@@ -1092,7 +1159,7 @@ ScrollView {
                             Repeater {
                                 model: root.currentInsight() ? root.currentInsight().scanSteps : []
 
-                                Rectangle {
+                                AutoHeightRectangle {
                                     Layout.fillWidth: true
                                     radius: 12
                                     color: "#f2ede4"
@@ -1100,8 +1167,10 @@ ScrollView {
                                     border.width: 1
 
                                     ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
+                                        x: 10
+                                        y: 10
+                                        width: parent.width - 10 * 2
+                                        height: implicitHeight
                                         spacing: 4
 
                                         Label {
@@ -1139,7 +1208,7 @@ ScrollView {
                             Repeater {
                                 model: root.currentInsight() ? root.currentInsight().weightHints : []
 
-                                Rectangle {
+                                AutoHeightRectangle {
                                     Layout.fillWidth: true
                                     radius: 12
                                     color: "#eef5ff"
@@ -1147,8 +1216,10 @@ ScrollView {
                                     border.width: 1
 
                                     ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
+                                        x: 10
+                                        y: 10
+                                        width: parent.width - 10 * 2
+                                        height: implicitHeight
                                         spacing: 4
 
                                         Label {
@@ -1221,7 +1292,7 @@ ScrollView {
                             Repeater {
                                 model: root.currentInsight() ? root.currentInsight().supportingDishes : []
 
-                                Rectangle {
+                                AutoHeightRectangle {
                                     Layout.fillWidth: true
                                     radius: 12
                                     color: root.selectedInsightHasDish(modelData.id) ? "#eef7ec" : "#f7faf4"
@@ -1229,23 +1300,32 @@ ScrollView {
                                     border.width: 1
 
                                     ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
+                                        x: 10
+                                        y: 10
+                                        width: parent.width - 10 * 2
+                                        height: implicitHeight
                                         spacing: 5
 
-                                        RowLayout {
+                                        ColumnLayout {
                                             Layout.fillWidth: true
+                                            spacing: 6
 
                                             Label {
                                                 Layout.fillWidth: true
+                                                wrapMode: Text.Wrap
                                                 text: modelData.name + (modelData.merchantName.length > 0 ? " | " + modelData.merchantName : "")
                                                 font.bold: true
                                                 color: "#2e241a"
                                             }
 
-                                            Button {
-                                                text: "筛到菜品"
-                                                onClicked: root.focusDishSearch(modelData.name)
+                                            Flow {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+
+                                                ReadableButton {
+                                                    text: "筛到菜品"
+                                                    onClicked: root.focusDishSearch(modelData.name)
+                                                }
                                             }
                                         }
 
@@ -1292,7 +1372,7 @@ ScrollView {
                             Repeater {
                                 model: root.currentInsight() ? root.currentInsight().supportingMeals : []
 
-                                Rectangle {
+                                AutoHeightRectangle {
                                     Layout.fillWidth: true
                                     radius: 12
                                     color: "#f9f3e7"
@@ -1300,21 +1380,25 @@ ScrollView {
                                     border.width: 1
 
                                     ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
+                                        x: 10
+                                        y: 10
+                                        width: parent.width - 10 * 2
+                                        height: implicitHeight
                                         spacing: 5
 
-                                        RowLayout {
+                                        Label {
                                             Layout.fillWidth: true
+                                            wrapMode: Text.Wrap
+                                            text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
+                                            font.bold: true
+                                            color: "#2e241a"
+                                        }
 
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: (modelData.mealTypeLabel ? modelData.mealTypeLabel : modelData.mealType) + " | " + modelData.eatenAt
-                                                font.bold: true
-                                                color: "#2e241a"
-                                            }
+                                        Flow {
+                                            Layout.fillWidth: true
+                                            spacing: 8
 
-                                            Button {
+                                            ReadableButton {
                                                 text: "载入这餐"
                                                 onClicked: loadMealForEdit(modelData.id)
                                             }
@@ -1361,15 +1445,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#ece4d8"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -1382,7 +1468,7 @@ ScrollView {
                 Repeater {
                     model: mealLogManager.recentMeals
 
-                    Rectangle {
+                    AutoHeightRectangle {
                         id: mealCard
                         Layout.fillWidth: true
                         radius: 14
@@ -1403,8 +1489,10 @@ ScrollView {
                         property bool insightHighlighted: root.selectedInsightHasMeal(modelData.id)
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
+                            x: 12
+                            y: 12
+                            width: parent.width - 12 * 2
+                            height: implicitHeight
                             spacing: 6
 
                             Label {
@@ -1418,22 +1506,22 @@ ScrollView {
                                 Layout.fillWidth: true
                                 spacing: 8
 
-                                Button {
+                                ReadableButton {
                                     text: "复用这餐"
                                     onClicked: applyMealTemplate(modelData, false)
                                 }
 
-                                Button {
+                                ReadableButton {
                                     text: "只加菜"
                                     onClicked: applyMealTemplate(modelData, true)
                                 }
 
-                                Button {
+                                ReadableButton {
                                     text: "编辑"
                                     onClicked: loadMealForEdit(modelData.id)
                                 }
 
-                                Button {
+                                ReadableButton {
                                     text: "删除"
                                     onClicked: {
                                         if (mealLogManager.deleteMealLog(modelData.id)) {
@@ -1462,6 +1550,8 @@ ScrollView {
                             }
 
                             Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
                                 text: "价格 " + modelData.totalPrice + "，用餐 " + modelData.totalEatTimeMinutes + " 分钟，下节课前还有 " + modelData.minutesUntilNextClass + " 分钟"
                                 color: "#5f4d3d"
                             }
@@ -1474,7 +1564,7 @@ ScrollView {
                                 color: "#7b6756"
                             }
 
-                            Rectangle {
+                            AutoHeightRectangle {
                                 visible: mealCard.linkedRecommendationResolved || mealCard.feedbackLinkedToRecommendation
                                 Layout.fillWidth: true
                                 radius: 12
@@ -1483,8 +1573,10 @@ ScrollView {
                                 border.width: 1
 
                                 ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 10
+                                    x: 10
+                                    y: 10
+                                    width: parent.width - 10 * 2
+                                    height: implicitHeight
                                     spacing: 4
 
                                     Label {
@@ -1549,7 +1641,7 @@ ScrollView {
                                         color: "#52718f"
                                     }
 
-                                    Rectangle {
+                                    AutoHeightRectangle {
                                         visible: mealCard.linkedRecommendationResolved
                                                  && modelData.recommendationTopCandidateDishName
                                                  && modelData.recommendationTopCandidateDishName.length > 0
@@ -1562,8 +1654,10 @@ ScrollView {
                                         border.width: 1
 
                                         ColumnLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 10
+                                            x: 10
+                                            y: 10
+                                            width: parent.width - 10 * 2
+                                            height: implicitHeight
                                             spacing: 6
 
                                             Label {
@@ -1600,7 +1694,7 @@ ScrollView {
                                                 color: "#6c7e90"
                                             }
 
-                                            Rectangle {
+                                            AutoHeightRectangle {
                                                 Layout.fillWidth: true
                                                 radius: 8
                                                 color: "#edf4fc"
@@ -1608,8 +1702,10 @@ ScrollView {
                                                 border.width: 1
 
                                                 ColumnLayout {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 8
+                                                    x: 8
+                                                    y: 8
+                                                    width: parent.width - 8 * 2
+                                                    height: implicitHeight
                                                     spacing: 3
 
                                                     Label {
@@ -1634,7 +1730,7 @@ ScrollView {
                                                 }
                                             }
 
-                                            Rectangle {
+                                            AutoHeightRectangle {
                                                 Layout.fillWidth: true
                                                 radius: 8
                                                 color: "#eef8ef"
@@ -1642,8 +1738,10 @@ ScrollView {
                                                 border.width: 1
 
                                                 ColumnLayout {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 8
+                                                    x: 8
+                                                    y: 8
+                                                    width: parent.width - 8 * 2
+                                                    height: implicitHeight
                                                     spacing: 3
 
                                                     Label {
@@ -1717,7 +1815,7 @@ ScrollView {
                                         Repeater {
                                             model: modelData.recommendationCandidates
 
-                                            Rectangle {
+                                            AutoHeightRectangle {
                                                 Layout.fillWidth: true
                                                 radius: 10
                                                 color: modelData.selected ? "#dfeeff" : "#f8fbff"
@@ -1725,8 +1823,10 @@ ScrollView {
                                                 border.width: 1
 
                                                 ColumnLayout {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 8
+                                                    x: 8
+                                                    y: 8
+                                                    width: parent.width - 8 * 2
+                                                    height: implicitHeight
                                                     spacing: 3
 
                                                     Label {
@@ -1755,7 +1855,7 @@ ScrollView {
                                 }
                             }
 
-                            Rectangle {
+                            AutoHeightRectangle {
                                 Layout.fillWidth: true
                                 radius: 12
                                 color: "#f5eee3"
@@ -1763,8 +1863,10 @@ ScrollView {
                                 border.width: 1
 
                                 ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 10
+                                    x: 10
+                                    y: 10
+                                    width: parent.width - 10 * 2
+                                    height: implicitHeight
                                     spacing: 8
 
                                     Label {
@@ -1775,12 +1877,13 @@ ScrollView {
 
                                     GridLayout {
                                         Layout.fillWidth: true
-                                        columns: 3
+                                        columns: 2
                                         columnSpacing: 10
                                         rowSpacing: 8
 
                                         Label { text: "口味"; color: "#6a5442" }
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackTasteRating
@@ -1789,6 +1892,7 @@ ScrollView {
                                         Label { text: "复吃"; color: "#6a5442" }
 
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackRepeatWillingness
@@ -1796,6 +1900,7 @@ ScrollView {
                                         }
                                         Label { text: "饱腹"; color: "#6a5442" }
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackFullnessLevel
@@ -1804,6 +1909,7 @@ ScrollView {
 
                                         Label { text: "犯困"; color: "#6a5442" }
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackSleepinessLevel
@@ -1811,6 +1917,7 @@ ScrollView {
                                         }
                                         Label { text: "舒适"; color: "#6a5442" }
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackComfortLevel
@@ -1819,6 +1926,7 @@ ScrollView {
 
                                         Label { text: "专注"; color: "#6a5442" }
                                         SpinBox {
+                                            Layout.fillWidth: true
                                             from: 1
                                             to: 5
                                             value: mealCard.feedbackFocusImpactLevel
@@ -1841,7 +1949,7 @@ ScrollView {
                                         onTextChanged: mealCard.feedbackTextValue = text
                                     }
 
-                                    Button {
+                                    ReadableButton {
                                         text: modelData.feedbackSaved ? "更新反馈" : "保存反馈"
                                         onClicked: {
                                             if (mealLogManager.saveMealFeedback(

@@ -3,10 +3,58 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 ScrollView {
+    component AutoHeightRectangle: Rectangle {
+        Layout.preferredHeight: implicitHeight
+        implicitHeight: childrenRect.height > 0
+                        ? childrenRect.y + childrenRect.height + childrenRect.y
+                        : 0
+    }
+    component ReadableButton: Button {
+        id: readableButton
+
+        contentItem: Label {
+            text: readableButton.text
+            color: readableButton.enabled ? "#2c241b" : "#8a8176"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
     id: root
     clip: true
 
+    readonly property bool narrowLayout: root.availableWidth < 380
     property int editingEntryId: 0
+    property var intensityOptions: [
+        { label: "低", value: "low" },
+        { label: "中", value: "medium" },
+        { label: "高", value: "high" }
+    ]
+
+    function comboIndexByValue(box, value) {
+        for (let i = 0; i < box.count; ++i) {
+            const item = box.model[i]
+            if (item && item.value !== undefined) {
+                if (item.value === value) {
+                    return i
+                }
+                continue
+            }
+            if (item === value) {
+                return i
+            }
+        }
+        return box.count > 0 ? 0 : -1
+    }
+
+    function optionLabel(options, value) {
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === value) {
+                return options[i].label
+            }
+        }
+        return value
+    }
 
     function weekdayIndexForValue(value) {
         for (let i = 0; i < weekdayBox.count; ++i) {
@@ -36,7 +84,7 @@ ScrollView {
         endPeriodBox.currentIndex = 0
         locationField.text = ""
         campusZoneField.text = ""
-        intensityField.text = "medium"
+        intensityBox.currentIndex = comboIndexByValue(intensityBox, "medium")
         notesField.text = ""
     }
 
@@ -48,7 +96,7 @@ ScrollView {
         endPeriodBox.currentIndex = periodIndexForValue(entry.periodEnd)
         locationField.text = entry.location
         campusZoneField.text = entry.campusZone
-        intensityField.text = entry.intensityLevel
+        intensityBox.currentIndex = comboIndexByValue(intensityBox, entry.intensityLevel)
         notesField.text = entry.notes
     }
 
@@ -63,7 +111,7 @@ ScrollView {
                 courseNameField.text,
                 locationField.text,
                 campusZoneField.text,
-                intensityField.text,
+                intensityBox.currentValue,
                 notesField.text
             )
         } else {
@@ -74,7 +122,7 @@ ScrollView {
                 courseNameField.text,
                 locationField.text,
                 campusZoneField.text,
-                intensityField.text,
+                intensityBox.currentValue,
                 notesField.text
             )
         }
@@ -88,9 +136,10 @@ ScrollView {
 
     ColumnLayout {
         width: root.availableWidth
+        height: implicitHeight
         spacing: 16
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 24
@@ -99,8 +148,10 @@ ScrollView {
             border.width: 1
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -121,12 +172,12 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Button {
+                    ReadableButton {
                         text: "刷新"
                         onClicked: scheduleManager.reload()
                     }
 
-                    Button {
+                    ReadableButton {
                         text: "恢复预置课表"
                         onClicked: {
                             if (scheduleManager.resetToProvidedSchedule()) {
@@ -151,15 +202,17 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#e7efe1"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 10
 
                 Label {
@@ -176,7 +229,7 @@ ScrollView {
                     Repeater {
                         model: scheduleManager.classPeriods
 
-                        Rectangle {
+                        AutoHeightRectangle {
                             width: 150
                             height: 72
                             radius: 14
@@ -184,8 +237,10 @@ ScrollView {
                             border.color: "#cad9c3"
 
                             Column {
-                                anchors.fill: parent
-                                anchors.margins: 10
+                                x: 10
+                                y: 10
+                                width: parent.width - 10 * 2
+                                height: implicitHeight
                                 spacing: 4
 
                                 Label {
@@ -213,21 +268,26 @@ ScrollView {
         Repeater {
             model: scheduleManager.weekSchedule
 
-            Rectangle {
+            AutoHeightRectangle {
                 Layout.fillWidth: true
                 Layout.margins: 16
                 radius: 20
                 color: modelData.entryCount > 0 ? "#f0e5d5" : "#efece7"
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 20
+                    x: 20
+                    y: 20
+                    width: parent.width - 20 * 2
+                    height: implicitHeight
                     spacing: 12
 
-                    RowLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 4
 
                         Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
                             text: modelData.label
                             font.pixelSize: 22
                             font.bold: true
@@ -236,7 +296,6 @@ ScrollView {
 
                         Label {
                             Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignRight
                             text: modelData.entryCount > 0 ? (modelData.entryCount + " 个条目") : "暂无课程"
                             color: "#6b5643"
                         }
@@ -249,7 +308,7 @@ ScrollView {
                         Repeater {
                             model: modelData.entries
 
-                            Rectangle {
+                            AutoHeightRectangle {
                                 Layout.fillWidth: true
                                 radius: 16
                                 color: "#fffaf3"
@@ -257,12 +316,15 @@ ScrollView {
                                 border.width: 1
 
                                 ColumnLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 14
+                                    x: 14
+                                    y: 14
+                                    width: parent.width - 14 * 2
+                                    height: implicitHeight
                                     spacing: 6
 
-                                    RowLayout {
+                                    ColumnLayout {
                                         Layout.fillWidth: true
+                                        spacing: 6
 
                                         Label {
                                             Layout.fillWidth: true
@@ -272,35 +334,46 @@ ScrollView {
                                             color: "#2d2419"
                                         }
 
-                                        Button {
-                                            text: "编辑"
-                                            onClicked: loadEntry(modelData)
-                                        }
+                                        Flow {
+                                            Layout.fillWidth: true
+                                            spacing: 8
 
-                                        Button {
-                                            text: "删除"
-                                            onClicked: {
-                                                if (scheduleManager.deleteEntry(modelData.id) && editingEntryId === modelData.id) {
-                                                    resetScheduleForm()
+                                            ReadableButton {
+                                                text: "编辑"
+                                                onClicked: loadEntry(modelData)
+                                            }
+
+                                            ReadableButton {
+                                                text: "删除"
+                                                onClicked: {
+                                                    if (scheduleManager.deleteEntry(modelData.id) && editingEntryId === modelData.id) {
+                                                        resetScheduleForm()
+                                                    }
                                                 }
                                             }
                                         }
                                     }
 
                                     Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
                                         text: modelData.periodRange + " | " + modelData.timeRange
                                         color: "#5a4a3c"
                                     }
 
                                     Label {
                                         visible: modelData.location.length > 0
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
                                         text: modelData.location
                                         color: "#5a4a3c"
                                     }
 
                                     Label {
                                         visible: modelData.campusZone.length > 0 || modelData.intensityLevel.length > 0
-                                        text: "区域 " + modelData.campusZone + " | 强度 " + modelData.intensityLevel
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        text: "区域 " + modelData.campusZone + " | 强度 " + root.optionLabel(root.intensityOptions, modelData.intensityLevel)
                                         color: "#5a4a3c"
                                     }
 
@@ -325,19 +398,22 @@ ScrollView {
             }
         }
 
-        Rectangle {
+        AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
             radius: 20
             color: "#dde8ef"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
+                x: 20
+                y: 20
+                width: parent.width - 20 * 2
+                height: implicitHeight
                 spacing: 12
 
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
+                    spacing: 8
 
                     Label {
                         text: editingEntryId > 0 ? "编辑课表条目" : "新增课表条目"
@@ -346,7 +422,7 @@ ScrollView {
                         color: "#223747"
                     }
 
-                    Button {
+                    ReadableButton {
                         visible: editingEntryId > 0
                         text: "取消"
                         onClicked: resetScheduleForm()
@@ -355,7 +431,7 @@ ScrollView {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -406,10 +482,12 @@ ScrollView {
                         placeholderText: "校区区域"
                     }
 
-                    TextField {
-                        id: intensityField
+                    ComboBox {
+                        id: intensityBox
                         Layout.fillWidth: true
-                        placeholderText: "强度，例如 medium"
+                        model: root.intensityOptions
+                        textRole: "label"
+                        valueRole: "value"
                     }
 
                     TextField {
@@ -419,7 +497,7 @@ ScrollView {
                     }
                 }
 
-                Button {
+                ReadableButton {
                     text: editingEntryId > 0 ? "更新条目" : "添加条目"
                     onClicked: saveEntry()
                 }

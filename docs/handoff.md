@@ -3,7 +3,7 @@
 ## Project
 
 - Name: `MealAdvisor`
-- Root path: `D:\Codex\haohaochifan`
+- Root path: `D:\Codex\2026-04-18-qt-c-app`
 - Stack: `Qt Quick/QML + C++ + SQLite`
 - Target: Android-first, desktop build used for local verification
 
@@ -116,6 +116,38 @@ did not change schema, recommendation scoring, Stage 6 parser behavior, or LLM
 scope. Desktop build, short offscreen smoke launch, and
 `MealAdvisorValidation.exe` were re-run; validation remains `36/38` with the
 same two known non-blocking failures.
+Stage 7 preflight second pass has now repaired the highest-risk runtime-visible
+copy from Home/AppState, ScheduleManager, FoodManager, MealLogManager,
+RecommendationEngine, parser validation details, and default planning/schedule
+seeds. Two dense Meals quick-action rows now wrap as label plus action flow.
+Validation remains `36/38`; the remaining failures are still the same two
+known non-blocking recommendation/feedback heuristic cases.
+Stage 7 preflight third pass found and fixed a real runtime layout blocker:
+Home / Schedule / Food / Meals card containers could collapse and overlap at
+phone-like desktop sizes. The main QML pages now use content-height card
+wrappers, normal action buttons have readable text under the desktop style, and
+Food / Schedule enum selectors display Chinese labels while preserving the
+original stored enum values. Desktop build, short desktop smoke launch, and
+`MealAdvisorValidation.exe` were re-run; validation remains `36/38` with the
+same two known non-blocking failures.
+Stage 7 preflight fourth pass stayed frontend-only and focused lower down the
+scroll pages: Food / Schedule / Meals now collapse more lower forms to one
+column at narrow widths, long lower-card title/action rows stack instead of
+squeezing, Meals feedback score controls use clearer label/value pairs, and
+the top tabs plus desktop minimum width were tightened for mobile-like smoke
+checks. Desktop build, short desktop smoke/screenshot launch, and
+`MealAdvisorValidation.exe` were re-run; validation remains `36/38` with the
+same two known non-blocking failures.
+Stage 7 final desktop preflight pass found and fixed three small must-fix
+usability gaps before Android packaging: Food dish `清空筛选` now clears both
+search text and merchant filter, Meals dish search has an explicit
+`清空搜索` action when the picker is empty/filtered, and Meals save can be
+clicked with no selected dishes so the existing C++ guardrail message is
+reachable. Desktop build, a real 5-second desktop process smoke launch, and
+`MealAdvisorValidation.exe` were re-run; validation remains `36/38` with the
+same two known non-blocking failures. Direct native-window GUI click automation
+was not available in this shell, so the next confidence step is Android APK
+packaging plus on-device or emulator touch validation.
 
 ## Pages Implemented
 
@@ -292,16 +324,18 @@ next step from scratch.
     packaging was not rerun because no shared build or packaging logic changed.
     Real provider replay was not rerun because no Stage 6 code changed and the
     current shell had no provider key environment variables.
-14. The first Stage 7 preflight pass fixed obvious static QML copy issues, but
-    dynamic C++/database-sourced text and long Meals cards still need runtime
-    visual review before declaring frontend copy and touch density complete.
+14. The first five Stage 7 preflight passes fixed obvious static QML copy
+    issues, higher-risk dynamic C++/seed/validation strings, a blocking
+    phone-width card-overlap problem, normal button text readability, and the
+    most obvious enum-display, lower-page narrow-width, search-clear, and
+    Meals save-guardrail reachability issues. Remaining frontend work is mainly
+    Android touch validation and real repeated-use checks.
 
 ## Recommended Next Steps
 
-1. Continue Stage 7 with another small preflight pass:
-   inspect Home dynamic recommendation text, Meals long-card density, Food /
-   Schedule form wrapping, empty/error states, and Android/mobile touch
-   ergonomics.
+1. Continue Stage 7 with Android packaging and first Android runtime
+   validation: build the arm64 debug APK, install/launch on a device or
+   emulator if available, and focus on native touch/keyboard/scroll behavior.
 2. Reuse desktop build, short smoke check, and `MealAdvisorValidation.exe` as
    the fast regression path; rerun Android arm64 packaging only if shared build
    or packaging logic changes.

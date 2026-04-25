@@ -13,27 +13,27 @@ namespace
 QList<ScheduleEntry> providedScheduleEntries()
 {
     return {
-        {0, 3, 3, 4, QStringLiteral("Imported Physics A"), QStringLiteral("Building A-110"), QStringLiteral("North Campus"), QStringLiteral("medium"), QString()},
-        {0, 3, 7, 8, QStringLiteral("Imported Analysis"), QStringLiteral("Building B-208"), QStringLiteral("North Campus"), QStringLiteral("medium"), QString()},
-        {0, 3, 9, 10, QStringLiteral("Imported Statistics"), QStringLiteral("Building C-107"), QStringLiteral("North Campus"), QStringLiteral("medium"), QString()},
-        {0, 3, 11, 12, QStringLiteral("Imported Ideology"), QStringLiteral("Building TBD"), QStringLiteral("North Campus"), QStringLiteral("low"), QStringLiteral("Imported from the original screenshot. Replace with the confirmed classroom when available.")},
-        {0, 4, 3, 5, QStringLiteral("Imported C Programming Lab"), QStringLiteral("Building D-207"), QStringLiteral("South Campus"), QStringLiteral("high"), QString()},
-        {0, 4, 9, 10, QStringLiteral("Imported C Programming Lab"), QStringLiteral("Building D-207"), QStringLiteral("South Campus"), QStringLiteral("high"), QString()},
-        {0, 5, 1, 2, QStringLiteral("Imported Physics A"), QStringLiteral("Building A-110"), QStringLiteral("North Campus"), QStringLiteral("medium"), QString()},
-        {0, 5, 7, 9, QStringLiteral("Imported Signals"), QStringLiteral("Building B-417"), QStringLiteral("North Campus"), QStringLiteral("high"), QString()}
+        {0, 3, 3, 4, QStringLiteral("导入课程：大学物理 A"), QStringLiteral("A-110 教室"), QStringLiteral("北校区"), QStringLiteral("medium"), QString()},
+        {0, 3, 7, 8, QStringLiteral("导入课程：数学分析"), QStringLiteral("B-208 教室"), QStringLiteral("北校区"), QStringLiteral("medium"), QString()},
+        {0, 3, 9, 10, QStringLiteral("导入课程：统计学"), QStringLiteral("C-107 教室"), QStringLiteral("北校区"), QStringLiteral("medium"), QString()},
+        {0, 3, 11, 12, QStringLiteral("导入课程：思政课"), QStringLiteral("待确认教室"), QStringLiteral("北校区"), QStringLiteral("low"), QStringLiteral("来自原始截图，教室信息后续确认后可替换。")},
+        {0, 4, 3, 5, QStringLiteral("导入课程：C 程序设计实验"), QStringLiteral("D-207 教室"), QStringLiteral("南校区"), QStringLiteral("high"), QString()},
+        {0, 4, 9, 10, QStringLiteral("导入课程：C 程序设计实验"), QStringLiteral("D-207 教室"), QStringLiteral("南校区"), QStringLiteral("high"), QString()},
+        {0, 5, 1, 2, QStringLiteral("导入课程：大学物理 A"), QStringLiteral("A-110 教室"), QStringLiteral("北校区"), QStringLiteral("medium"), QString()},
+        {0, 5, 7, 9, QStringLiteral("导入课程：信号与系统"), QStringLiteral("B-417 教室"), QStringLiteral("北校区"), QStringLiteral("high"), QString()}
     };
 }
 
 QString sessionLabel(const QString &sessionGroup)
 {
     if (sessionGroup == QStringLiteral("morning")) {
-        return QStringLiteral("Morning");
+        return QStringLiteral("上午");
     }
     if (sessionGroup == QStringLiteral("afternoon")) {
-        return QStringLiteral("Afternoon");
+        return QStringLiteral("下午");
     }
     if (sessionGroup == QStringLiteral("evening")) {
-        return QStringLiteral("Evening");
+        return QStringLiteral("晚上");
     }
     return sessionGroup;
 }
@@ -146,7 +146,7 @@ bool ScheduleManager::updateEntry(int entryId,
 bool ScheduleManager::deleteEntry(int entryId)
 {
     if (entryId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid schedule entry.");
+        m_lastError = QStringLiteral("请选择有效的课表条目。");
         emit scheduleChanged();
         return false;
     }
@@ -155,7 +155,7 @@ bool ScheduleManager::deleteEntry(int entryId)
     QString errorMessage;
     if (!repository.deleteEntry(entryId, &errorMessage)) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to delete schedule entry.")
+                          ? QStringLiteral("删除课表条目失败。")
                           : errorMessage;
         emit scheduleChanged();
         return false;
@@ -205,7 +205,7 @@ void ScheduleManager::refreshState()
             entryMap.insert(QStringLiteral("periodStart"), entry.periodStart);
             entryMap.insert(QStringLiteral("periodEnd"), entry.periodEnd);
             entryMap.insert(QStringLiteral("periodRange"),
-                            QStringLiteral("Period %1-%2").arg(entry.periodStart).arg(entry.periodEnd));
+                            QStringLiteral("第 %1-%2 节").arg(entry.periodStart).arg(entry.periodEnd));
             entryMap.insert(QStringLiteral("timeRange"),
                             QStringLiteral("%1-%2").arg(startPeriod.startTime, endPeriod.endTime));
             entryMap.insert(QStringLiteral("location"), entry.location);
@@ -237,19 +237,19 @@ bool ScheduleManager::saveEntry(int entryId,
 {
     const QString trimmedCourseName = courseName.trimmed();
     if (trimmedCourseName.isEmpty()) {
-        m_lastError = QStringLiteral("Course name is required.");
+        m_lastError = QStringLiteral("课程名不能为空。");
         emit scheduleChanged();
         return false;
     }
 
     if (!managedWeekdays().contains(weekday)) {
-        m_lastError = QStringLiteral("Weekday must stay inside the managed planning range.");
+        m_lastError = QStringLiteral("星期必须在当前规划范围内。");
         emit scheduleChanged();
         return false;
     }
 
     if (periodStart <= 0 || periodEnd < periodStart) {
-        m_lastError = QStringLiteral("Period range is invalid.");
+        m_lastError = QStringLiteral("节次范围无效。");
         emit scheduleChanged();
         return false;
     }
@@ -263,13 +263,13 @@ bool ScheduleManager::saveEntry(int entryId,
     }();
 
     if (!validPeriodIndices.contains(periodStart) || !validPeriodIndices.contains(periodEnd)) {
-        m_lastError = QStringLiteral("Selected periods are out of range.");
+        m_lastError = QStringLiteral("选择的节次超出范围。");
         emit scheduleChanged();
         return false;
     }
 
     if (isUpdate && entryId <= 0) {
-        m_lastError = QStringLiteral("Please choose a valid schedule entry.");
+        m_lastError = QStringLiteral("请选择有效的课表条目。");
         emit scheduleChanged();
         return false;
     }
@@ -292,7 +292,7 @@ bool ScheduleManager::saveEntry(int entryId,
                         : repository.addEntry(entry, &errorMessage);
     if (!ok) {
         m_lastError = errorMessage.isEmpty()
-                          ? QStringLiteral("Failed to save schedule entry.")
+                          ? QStringLiteral("保存课表条目失败。")
                           : errorMessage;
         emit scheduleChanged();
         return false;
@@ -307,15 +307,15 @@ QString ScheduleManager::weekdayLabel(int weekday)
 {
     switch (weekday) {
     case 2:
-        return QStringLiteral("Tuesday");
+        return QStringLiteral("周二");
     case 3:
-        return QStringLiteral("Wednesday");
+        return QStringLiteral("周三");
     case 4:
-        return QStringLiteral("Thursday");
+        return QStringLiteral("周四");
     case 5:
-        return QStringLiteral("Friday");
+        return QStringLiteral("周五");
     default:
-        return QStringLiteral("Weekday %1").arg(weekday);
+        return QStringLiteral("周 %1").arg(weekday);
     }
 }
 

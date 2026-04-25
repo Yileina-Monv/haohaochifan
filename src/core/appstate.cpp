@@ -17,32 +17,43 @@ QString weekdaySummary(const QList<int> &weekdays)
     for (const int weekday : weekdays) {
         switch (weekday) {
         case 1:
-            labels.append(QStringLiteral("Mon"));
+            labels.append(QStringLiteral("周一"));
             break;
         case 2:
-            labels.append(QStringLiteral("Tue"));
+            labels.append(QStringLiteral("周二"));
             break;
         case 3:
-            labels.append(QStringLiteral("Wed"));
+            labels.append(QStringLiteral("周三"));
             break;
         case 4:
-            labels.append(QStringLiteral("Thu"));
+            labels.append(QStringLiteral("周四"));
             break;
         case 5:
-            labels.append(QStringLiteral("Fri"));
+            labels.append(QStringLiteral("周五"));
             break;
         case 6:
-            labels.append(QStringLiteral("Sat"));
+            labels.append(QStringLiteral("周六"));
             break;
         case 7:
-            labels.append(QStringLiteral("Sun"));
+            labels.append(QStringLiteral("周日"));
             break;
         default:
             break;
         }
     }
 
-    return labels.join(QStringLiteral(", "));
+    return labels.join(QStringLiteral("、"));
+}
+
+QString recommendationProfileDisplayName(const QString &name)
+{
+    if (name == QStringLiteral("Class Day")) {
+        return QStringLiteral("有课日");
+    }
+    if (name == QStringLiteral("Commute Day")) {
+        return QStringLiteral("通勤日");
+    }
+    return name;
 }
 }
 
@@ -95,21 +106,22 @@ void AppState::reload()
 
     if (!policies.isEmpty()) {
         const PlanningPolicy &policy = policies.first();
-        m_planningSummary = QStringLiteral("Active planning: %1")
+        m_planningSummary = QStringLiteral("规划范围：%1")
                                 .arg(weekdaySummary(policy.enabledWeekdays));
-        m_budgetSummary = QStringLiteral("Budget: RMB %1, flexible up to %2")
+        m_budgetSummary = QStringLiteral("预算：日常 %1 元，弹性上限 %2 元")
                               .arg(policy.defaultDailyBudget, 0, 'f', 0)
                               .arg(policy.flexibleBudgetCap, 0, 'f', 0);
     } else {
-        m_planningSummary = QStringLiteral("No planning policy loaded.");
-        m_budgetSummary = QStringLiteral("Budget policy unavailable.");
+        m_planningSummary = QStringLiteral("尚未加载规划策略。");
+        m_budgetSummary = QStringLiteral("预算策略不可用。");
     }
 
-    m_defaultProfileName = QStringLiteral("No recommendation profile loaded.");
+    m_defaultProfileName = QStringLiteral("尚未加载推荐策略。");
     for (const RecommendationProfile &profile : profiles) {
         if (profile.isDefault) {
             m_defaultProfileName =
-                QStringLiteral("Default profile: %1").arg(profile.name);
+                QStringLiteral("默认推荐策略：%1")
+                    .arg(recommendationProfileDisplayName(profile.name));
             break;
         }
     }
