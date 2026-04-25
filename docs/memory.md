@@ -126,6 +126,13 @@ If the current task changes project direction or major behavior, also update
   `RecommendationEngine::testLlmConnection(...)` with the current input values,
   falls back to the existing AppConfig/env/default values for blank fields, and
   reports testing/success/error state in the Drawer.
+- Android HTTPS/TLS support has been fixed for the LLM connection path:
+  `CMakeLists.txt` now pulls the pinned KDAB `android_openssl` package during
+  Android configure, packages `libssl_3.so` / `libcrypto_3.so` through
+  `add_android_openssl_libraries(MealAdvisor)`, and `src/main.cpp` sets
+  `ANDROID_OPENSSL_SUFFIX=_3` before Qt starts. The rebuilt APK now contains
+  `lib/arm64-v8a/libplugins_tls_qopensslbackend_arm64-v8a.so`,
+  `lib/arm64-v8a/libssl_3.so`, and `lib/arm64-v8a/libcrypto_3.so`.
 - A generated warm beige / brown-yellow launcher icon has been added to the
   project resource library at `resources/icons/mealadvisor-launcher-source.png`
   and packaged into Android `mipmap-*` launcher resources under
@@ -1508,6 +1515,37 @@ Completion signal:
     - `adb devices -l` still returned no attached device, and
       `emulator -list-avds` still returned no configured AVD names, so Android
       install/launch/touch/keyboard/screenshot validation remains blocked.
+  - A targeted Android TLS fix then addressed the real-device screenshot where
+    Drawer `LLM 调试` failed with `TLS initialization failed`:
+    - `CMakeLists.txt` now uses `FetchContent` to pull pinned
+      `KDAB/android_openssl` commit
+      `b71f1470962019bd89534a2919f5925f93bc5779` for Android builds and calls
+      `add_android_openssl_libraries(MealAdvisor)`.
+    - `src/main.cpp` sets `ANDROID_OPENSSL_SUFFIX=_3` before constructing
+      `QGuiApplication` and logs `QSslSocket::supportsSsl()` / SSL library
+      versions on startup.
+    - Desktop build target `MealAdvisor` and validation target
+      `MealAdvisorValidation` both build successfully.
+    - `MealAdvisorValidation.exe` still reports `48/50` with only the same two
+      known non-blocking baseline failures.
+    - 5-second desktop smoke launch passed with empty stderr.
+    - Android arm64 debug APK rebuilt and copied to
+      `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`.
+    - Source and desktop APK SHA256 both match:
+      `6157107CD27478ECC716CC630378465B12E7B885D30A96906EF0768F701500F2`.
+    - APK size is `68925434` bytes, timestamp `2026-04-26 01:53:20`.
+    - `aapt list` confirms the APK now includes
+      `lib/arm64-v8a/libcrypto_3.so`,
+      `lib/arm64-v8a/libssl_3.so`, and
+      `lib/arm64-v8a/libplugins_tls_qopensslbackend_arm64-v8a.so`.
+    - `aapt dump badging` still reports package
+      `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+      `targetSdkVersion 36`, launcher icons under `res/mipmap-*-v4`,
+      launchable activity `org.qtproject.qt.android.bindings.QtActivity`, and
+      native-code `arm64-v8a`.
+    - `adb devices -l` and `emulator -list-avds` are still empty in this shell,
+      so the fix has packaging evidence but still needs a real-device retest of
+      Drawer `LLM 调试` -> `测试连接`.
 
 ## Next Steps
 
@@ -1520,15 +1558,20 @@ Priority note:
 Immediate next work:
 
 - Attach a real Android device or create an AVD, install the latest APK, and
-  validate the launcher icon, updated beige main shell, placeholder hiding
-  while typing, Drawer LLM connection test, Food labels, and Feedback
-  LLM/manual fallback with screenshots, UI-tree inspection, keyboard entry,
-  scrolling, and portrait/landscape checks.
+  first re-test Drawer `LLM 调试` -> `测试连接` against DeepSeek. The previous
+  real-device failure was `TLS initialization failed`; the APK now packages the
+  Android OpenSSL backend and should be rechecked before doing broader UI QA.
+  Then validate launcher icon, updated beige main shell, placeholder hiding
+  while typing, Food labels, and Feedback LLM/manual fallback with screenshots,
+  UI-tree inspection, keyboard entry, scrolling, and portrait/landscape checks.
 
 1. Run real Android runtime validation on an attached device or newly
    configured AVD. Use adb/UI-tree-derived coordinates, screenshots, and
    logcat if anything crashes.
-2. Focus the Android pass on the newly changed surfaces: the main header should
+2. Focus the Android pass on the newly changed surfaces: Drawer `LLM 调试`
+   should no longer fail with `TLS initialization failed`; if it still fails,
+   capture logcat lines around `Device supports SSL:` / `qt.network.ssl`.
+   The main header should
    no longer show the planning/budget line; placeholder hints should disappear
    while any input is focused or populated instead of floating above the field;
    Drawer `LLM 调试` should show a usable `测试连接` status; Food tags must show

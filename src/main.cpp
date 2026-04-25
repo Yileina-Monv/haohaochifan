@@ -1,6 +1,8 @@
 #include <QGuiApplication>
+#include <QDebug>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QSslSocket>
 
 #include "core/appconfig.h"
 #include "core/appstate.h"
@@ -12,9 +14,17 @@
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_ANDROID
+    qputenv("ANDROID_OPENSSL_SUFFIX", "_3");
+#endif
+
     QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("MealAdvisor"));
     QCoreApplication::setApplicationName(QStringLiteral("MealAdvisor"));
+
+    qInfo() << "Device supports SSL:" << QSslSocket::supportsSsl()
+            << QSslSocket::sslLibraryBuildVersionString()
+            << QSslSocket::sslLibraryVersionString();
 
     QQmlApplicationEngine engine;
     DatabaseManager databaseManager;

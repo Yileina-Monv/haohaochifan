@@ -291,6 +291,29 @@ reports package `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
 activity `org.qtproject.qt.android.bindings.QtActivity`, and native-code
 `arm64-v8a`. `adb devices -l` and `emulator -list-avds` remain empty, so Android
 install/launch/touch/keyboard/screenshot validation is still blocked.
+The latest targeted Android TLS fix then addressed the real-device screenshot
+where Drawer `LLM 调试` failed with `TLS initialization failed` while testing
+DeepSeek over HTTPS. `CMakeLists.txt` now pulls pinned
+`KDAB/android_openssl` commit `b71f1470962019bd89534a2919f5925f93bc5779` for
+Android builds and calls `add_android_openssl_libraries(MealAdvisor)`;
+`src/main.cpp` sets `ANDROID_OPENSSL_SUFFIX=_3` before Qt starts and logs
+`QSslSocket::supportsSsl()` / SSL library versions. Desktop build passed,
+5-second desktop smoke launch had empty stderr, and `MealAdvisorValidation.exe`
+still reports `48/50` with only the two known non-blocking baseline failures.
+The Android arm64 debug APK was rebuilt and copied to
+`C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`; source and
+desktop APK SHA256 now match
+`6157107CD27478ECC716CC630378465B12E7B885D30A96906EF0768F701500F2`, size
+`68925434` bytes, timestamp `2026-04-26 01:53:20`. `aapt list` confirms the
+APK now contains `lib/arm64-v8a/libcrypto_3.so`,
+`lib/arm64-v8a/libssl_3.so`, and
+`lib/arm64-v8a/libplugins_tls_qopensslbackend_arm64-v8a.so`; `aapt dump badging`
+still confirms package `org.qtproject.example.MealAdvisor`,
+`minSdkVersion 28`, `targetSdkVersion 36`, launchable activity
+`org.qtproject.qt.android.bindings.QtActivity`, launcher icons under
+`res/mipmap-*-v4`, and native-code `arm64-v8a`. `adb devices -l` and
+`emulator -list-avds` remain empty in this shell, so the OpenSSL fix still
+needs real-device retest through Drawer `LLM 调试` -> `测试连接`.
 
 ## Pages Implemented
 
@@ -404,6 +427,10 @@ next step from scratch.
 - Android packaging currently relies on a small Android-only CMake workaround
   that places the active NDK libc++ include directory before the raw NDK
   sysroot include path for `MealAdvisor`
+- Android HTTPS support now relies on the pinned KDAB Android OpenSSL helper,
+  which packages OpenSSL 3 libraries and the Qt OpenSSL TLS backend for the
+  arm64 APK. This was added after a real-device `TLS initialization failed`
+  report from Drawer `LLM 调试`.
 - There is now a desktop-only local validation target:
   `MealAdvisorValidation` seeds the current fake-data set and checks Meals /
   Food / Recommendation / Feedback / Schedule behavior without changing schema
@@ -524,12 +551,20 @@ next step from scratch.
     need Android runtime confirmation with the soft keyboard open, especially
     that hints disappear rather than floating above focused fields.
 
+24. The Android OpenSSL packaging fix has build/APK evidence and should remove
+    the previously reported `TLS initialization failed` error, but there was
+    still no attached adb device or configured AVD in this shell. The next
+    device pass should confirm `测试连接` against DeepSeek and capture logcat
+    around `Device supports SSL:` / `qt.network.ssl` if it still fails.
+
 ## Recommended Next Steps
 
 1. Attach a real Android device or create an AVD, install the latest desktop
-   APK, and validate the launcher icon, beige main shell, placeholder hiding,
-   Drawer LLM connection test, updated Food/Feedback flows with screenshots,
-   UI-tree inspection, keyboard input, scrolling, and portrait/landscape checks.
+   APK, and first retest Drawer `LLM 调试` -> `测试连接` against DeepSeek. The
+   previous device failure was `TLS initialization failed`; the current APK now
+   packages OpenSSL. Then validate the launcher icon, beige main shell,
+   placeholder hiding, updated Food/Feedback flows with screenshots, UI-tree
+   inspection, keyboard input, scrolling, and portrait/landscape checks.
 2. If Android screenshots show remaining readability problems, keep the next
    fix QML-only and targeted to the affected surface.
 3. If a real provider key is available, optionally run one live Chinese Drawer

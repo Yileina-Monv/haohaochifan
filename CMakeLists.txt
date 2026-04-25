@@ -11,6 +11,17 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0002 NEW)
 qt_policy(SET QTP0004 NEW)
 
+if (ANDROID)
+    include(FetchContent)
+    FetchContent_Declare(
+        android_openssl
+        DOWNLOAD_EXTRACT_TIMESTAMP true
+        URL https://github.com/KDAB/android_openssl/archive/b71f1470962019bd89534a2919f5925f93bc5779.zip
+    )
+    FetchContent_MakeAvailable(android_openssl)
+    include(${android_openssl_SOURCE_DIR}/android_openssl.cmake)
+endif()
+
 qt_add_executable(MealAdvisor
     src/core/appconfig.cpp
     src/core/appconfig.h
@@ -126,6 +137,8 @@ if (ANDROID)
                 "${MEALADVISOR_ANDROID_LIBCXX_INCLUDE}"
         )
     endif()
+
+    add_android_openssl_libraries(MealAdvisor)
 endif()
 
 if (NOT ANDROID)
