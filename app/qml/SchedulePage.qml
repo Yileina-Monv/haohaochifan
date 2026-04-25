@@ -451,7 +451,7 @@ ScrollView {
                     TextField {
                         id: courseNameField
                         Layout.fillWidth: true
-                        placeholderText: "课程名"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "课程名"
                     }
 
                     ComboBox {
@@ -473,13 +473,13 @@ ScrollView {
                     TextField {
                         id: locationField
                         Layout.fillWidth: true
-                        placeholderText: "地点"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "地点"
                     }
 
                     TextField {
                         id: campusZoneField
                         Layout.fillWidth: true
-                        placeholderText: "校区区域"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "校区区域"
                     }
 
                     ComboBox {
@@ -493,7 +493,7 @@ ScrollView {
                     TextField {
                         id: notesField
                         Layout.fillWidth: true
-                        placeholderText: "备注"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "备注"
                     }
                 }
 

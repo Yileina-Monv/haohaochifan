@@ -609,27 +609,27 @@ ScrollView {
                     TextField {
                         id: eatenAtField
                         Layout.fillWidth: true
-                        placeholderText: "用餐时间（例如 2026-04-22T12:30:00）"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "用餐时间（例如 2026-04-22T12:30:00）"
                     }
 
                     TextField {
                         id: totalPriceField
                         Layout.fillWidth: true
-                        placeholderText: "总价"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "总价"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
 
                     TextField {
                         id: eatTimeField
                         Layout.fillWidth: true
-                        placeholderText: "用餐分钟数"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "用餐分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: nextClassField
                         Layout.fillWidth: true
-                        placeholderText: "距离下节课还有几分钟"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "距离下节课还有几分钟"
                         enabled: classAfterMealCheck.checked
                         opacity: classAfterMealCheck.checked ? 1.0 : 0.6
                         inputMethodHints: Qt.ImhDigitsOnly
@@ -676,14 +676,14 @@ ScrollView {
                 TextField {
                     id: moodField
                     Layout.fillWidth: true
-                    placeholderText: "餐前状态标签"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "餐前状态标签"
                 }
 
                 TextArea {
                     id: mealNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-                    placeholderText: "这顿饭的备注"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "这顿饭的备注"
                     wrapMode: TextEdit.Wrap
                 }
             }
@@ -712,7 +712,7 @@ ScrollView {
                 TextField {
                     id: dishSearchField
                     Layout.fillWidth: true
-                    placeholderText: "搜索菜品，回车直接加入第一项"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "搜索菜品，回车直接加入第一项"
                     onTextChanged: {
                         mealLogManager.setDishSearch(text)
                         dishPicker.currentIndex = 0
@@ -777,7 +777,7 @@ ScrollView {
                     TextField {
                         id: portionRatioField
                         Layout.fillWidth: true
-                        placeholderText: "影响权重（留空用默认值）"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "影响权重（留空用默认值）"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                 }
@@ -785,7 +785,7 @@ ScrollView {
                 TextField {
                     id: selectedDishNoteField
                     Layout.fillWidth: true
-                    placeholderText: "这道菜的备注（可留空）"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "这道菜的备注（可留空）"
                 }
 
                 ReadableButton {
@@ -1944,7 +1944,7 @@ ScrollView {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 70
                                         text: mealCard.feedbackTextValue
-                                        placeholderText: "补一句这餐的主观感受"
+                                        placeholderText: activeFocus || text.length > 0 ? "" : "补一句这餐的主观感受"
                                         wrapMode: TextEdit.Wrap
                                         onTextChanged: mealCard.feedbackTextValue = text
                                     }

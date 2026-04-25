@@ -35,6 +35,8 @@ using WeightMap = QHash<QString, double>;
 
 constexpr double kValueCompareEpsilon = 0.0001;
 constexpr int kSupplementTimeoutMs = 15000;
+constexpr int kFeedbackTimeoutMs = 15000;
+constexpr int kConnectionTestTimeoutMs = 10000;
 
 const QStringList kSupplementTopLevelKeys = {
     QStringLiteral("version"),
@@ -57,6 +59,22 @@ const QStringList kSupplementResultKeys = {
     QStringLiteral("relaxedTimePreference")
 };
 
+const QStringList kFeedbackTopLevelKeys = {
+    QStringLiteral("version"),
+    QStringLiteral("result")
+};
+
+const QStringList kFeedbackResultKeys = {
+    QStringLiteral("fullnessLevel"),
+    QStringLiteral("sleepinessLevel"),
+    QStringLiteral("comfortLevel"),
+    QStringLiteral("focusImpactLevel"),
+    QStringLiteral("tasteRating"),
+    QStringLiteral("repeatWillingness"),
+    QStringLiteral("wouldEatAgain"),
+    QStringLiteral("freeTextFeedback")
+};
+
 const QList<double> kWeakIntentValues = {
     0.75, 0.85, 0.95, 1.0, 1.1, 1.2, 1.35
 };
@@ -71,6 +89,10 @@ const QList<double> kGovernanceValues = {
 
 const QList<int> kNapMinuteValues = {
     0, 10, 15, 20, 30, 40, 45, 60, 90
+};
+
+const QList<int> kFeedbackScoreValues = {
+    1, 2, 3, 4, 5
 };
 
 const QStringList kSleepPlanValues = {
@@ -135,6 +157,73 @@ QDateTime effectiveCurrentDateTime()
     }
 
     return QDateTime::currentDateTime();
+}
+
+QString trimmedOrFallback(const QString &value, const QString &fallback)
+{
+    const QString trimmedValue = value.trimmed();
+    return trimmedValue.isEmpty() ? fallback.trimmed() : trimmedValue;
+}
+
+QString providerErrorDetail(const QByteArray &payload)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error == QJsonParseError::NoError && document.isObject()) {
+        const QJsonObject root = document.object();
+        const QJsonValue errorValue = root.value(QStringLiteral("error"));
+        if (errorValue.isObject()) {
+            const QString message =
+                errorValue.toObject().value(QStringLiteral("message")).toString().trimmed();
+            if (!message.isEmpty()) {
+                return message;
+            }
+        } else if (errorValue.isString()) {
+            const QString message = errorValue.toString().trimmed();
+            if (!message.isEmpty()) {
+                return message;
+            }
+        }
+    }
+
+    QString bodyText = QString::fromUtf8(payload).trimmed();
+    if (bodyText.size() > 180) {
+        bodyText = bodyText.left(180) + QStringLiteral("...");
+    }
+    return bodyText;
+}
+
+bool chatCompletionResponseLooksValid(const QByteArray &payload, QString *error)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("响应不是有效 JSON。");
+        }
+        return false;
+    }
+
+    const QJsonArray choices =
+        document.object().value(QStringLiteral("choices")).toArray();
+    if (choices.isEmpty()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("响应缺少 choices。");
+        }
+        return false;
+    }
+
+    const QJsonObject firstChoice = choices.first().toObject();
+    const QJsonObject message = firstChoice.value(QStringLiteral("message")).toObject();
+    if (!message.value(QStringLiteral("content")).toString().trimmed().isEmpty() ||
+        firstChoice.contains(QStringLiteral("finish_reason"))) {
+        return true;
+    }
+
+    if (error != nullptr) {
+        *error = QStringLiteral("choices[0] 缺少可用的 message.content。");
+    }
+    return false;
 }
 
 struct MealContext
@@ -534,6 +623,64 @@ QString supplementParserUserPrompt(const MealContext &context, const QString &us
              QString::number(context.minutesUntilNextClass),
              contextSummary(context),
              userText);
+}
+
+QString feedbackParserSystemPrompt()
+{
+    return QStringLiteral(
+        "You are MealAdvisor's post-meal feedback parser.\n\n"
+        "Your only job is to convert one user's post-meal natural-language feedback into a strictly valid JSON object.\n\n"
+        "You are NOT a chatbot.\n"
+        "You are NOT a recommender.\n"
+        "You do NOT explain your reasoning.\n"
+        "You do NOT output markdown.\n"
+        "You do NOT output code fences.\n"
+        "You do NOT output natural language.\n"
+        "You do NOT output extra keys.\n"
+        "You do NOT omit required keys.\n\n"
+        "You must always return exactly one JSON object with this shape:\n\n"
+        "{\n"
+        "  \"version\": \"feedback_parser_v1\",\n"
+        "  \"result\": {\n"
+        "    \"fullnessLevel\": 3,\n"
+        "    \"sleepinessLevel\": 3,\n"
+        "    \"comfortLevel\": 3,\n"
+        "    \"focusImpactLevel\": 3,\n"
+        "    \"tasteRating\": 3,\n"
+        "    \"repeatWillingness\": 3,\n"
+        "    \"wouldEatAgain\": true,\n"
+        "    \"freeTextFeedback\": \"\"\n"
+        "  }\n"
+        "}\n\n"
+        "Rules:\n"
+        "1. All keys are required.\n"
+        "2. No extra keys are allowed.\n"
+        "3. Only output JSON.\n"
+        "4. No explanation, no comments, no markdown.\n"
+        "5. All score fields must be integers from 1 to 5.\n"
+        "6. wouldEatAgain must be a boolean.\n"
+        "7. freeTextFeedback must be a short Chinese summary of the user's feedback, not a new recommendation.\n\n"
+        "Score semantics:\n"
+        "- fullnessLevel: 1 means not full, 5 means too full or very full.\n"
+        "- sleepinessLevel: 1 means no sleepiness, 5 means very sleepy.\n"
+        "- comfortLevel: 1 means uncomfortable, 5 means very comfortable.\n"
+        "- focusImpactLevel: 1 means focus was hurt, 5 means focus stayed good.\n"
+        "- tasteRating: 1 means bad taste, 5 means excellent taste.\n"
+        "- repeatWillingness: 1 means do not want again, 5 means strongly want again.\n\n"
+        "If the input is vague, stay conservative around 3 rather than inventing strong scores.");
+}
+
+QString feedbackParserUserPrompt(const QString &mealSummary, const QString &userText)
+{
+    return QStringLiteral(
+               "Parse the following post-meal feedback into the required JSON format.\n\n"
+               "Selected meal summary:\n"
+               "%1\n\n"
+               "User feedback text:\n"
+               "%2\n\n"
+               "Return JSON only.")
+        .arg(mealSummary.trimmed().isEmpty() ? QStringLiteral("unknown") : mealSummary.trimmed(),
+             userText.trimmed());
 }
 
 bool containsKeyword(const QString &text, const QStringList &keywords)
@@ -1438,6 +1585,59 @@ bool readAllowedString(const QJsonObject &object,
     return true;
 }
 
+bool readRequiredBool(const QJsonObject &object,
+                      const QString &key,
+                      bool *value,
+                      QString *error)
+{
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isBool()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 必须是布尔值").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = jsonValue.toBool();
+    }
+    return true;
+}
+
+bool readRequiredString(const QJsonObject &object,
+                        const QString &key,
+                        QString *value,
+                        QString *error)
+{
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isString()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 必须是字符串").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = jsonValue.toString().trimmed();
+    }
+    return true;
+}
+
+QVariantMap feedbackResultToVariantMap(
+    const RecommendationEngine::FeedbackParseResult &result)
+{
+    QVariantMap map;
+    map.insert(QStringLiteral("fullnessLevel"), result.fullnessLevel);
+    map.insert(QStringLiteral("sleepinessLevel"), result.sleepinessLevel);
+    map.insert(QStringLiteral("comfortLevel"), result.comfortLevel);
+    map.insert(QStringLiteral("focusImpactLevel"), result.focusImpactLevel);
+    map.insert(QStringLiteral("tasteRating"), result.tasteRating);
+    map.insert(QStringLiteral("repeatWillingness"), result.repeatWillingness);
+    map.insert(QStringLiteral("wouldEatAgain"), result.wouldEatAgain);
+    map.insert(QStringLiteral("freeTextFeedback"), result.freeTextFeedback);
+    return map;
+}
+
 QStringList buildReasons(const Dish &dish,
                          const MealContext &context,
                          const RecommendationEngine::SupplementAdjustment &adjustment,
@@ -1786,9 +1986,49 @@ QVariantList RecommendationEngine::supplementWeights() const
     return m_supplementWeights;
 }
 
+QString RecommendationEngine::feedbackParseStatus() const
+{
+    return m_feedbackParseStatus;
+}
+
+QString RecommendationEngine::feedbackParseState() const
+{
+    return m_feedbackParseState;
+}
+
+bool RecommendationEngine::feedbackParseBusy() const
+{
+    return m_feedbackParseBusy;
+}
+
+bool RecommendationEngine::feedbackParseFallbackActive() const
+{
+    return m_feedbackParseFallbackActive;
+}
+
+QVariantMap RecommendationEngine::parsedFeedback() const
+{
+    return m_parsedFeedback;
+}
+
 QVariantList RecommendationEngine::activeWeightConfig() const
 {
     return m_activeWeightConfig;
+}
+
+QString RecommendationEngine::llmConnectionTestStatus() const
+{
+    return m_llmConnectionTestStatus;
+}
+
+QString RecommendationEngine::llmConnectionTestState() const
+{
+    return m_llmConnectionTestState;
+}
+
+bool RecommendationEngine::llmConnectionTestBusy() const
+{
+    return m_llmConnectionTestBusy;
 }
 
 void RecommendationEngine::reload()
@@ -2600,6 +2840,16 @@ void RecommendationEngine::setBusy(bool busy)
     emit busyChanged();
 }
 
+void RecommendationEngine::setFeedbackParseBusy(bool busy)
+{
+    if (m_feedbackParseBusy == busy) {
+        return;
+    }
+
+    m_feedbackParseBusy = busy;
+    emit feedbackParseChanged();
+}
+
 void RecommendationEngine::setInitialState()
 {
     m_summary = QStringLiteral("点击“生成推荐”后会按当前时间窗口运行 V2 推荐。");
@@ -2629,6 +2879,118 @@ RecommendationEngine::SupplementAdjustment
 RecommendationEngine::neutralSupplementAdjustment()
 {
     return SupplementAdjustment();
+}
+
+RecommendationEngine::FeedbackParseResult
+RecommendationEngine::neutralFeedbackParseResult()
+{
+    return FeedbackParseResult();
+}
+
+RecommendationEngine::FeedbackParseOutcome
+RecommendationEngine::evaluateFeedbackResponse(const QString &sourceText,
+                                               const QByteArray &responseBody,
+                                               const QString &networkError,
+                                               bool timedOut)
+{
+    FeedbackParseOutcome outcome;
+    outcome.result = neutralFeedbackParseResult();
+    outcome.result.freeTextFeedback = sourceText.trimmed();
+
+    if (!networkError.trimmed().isEmpty()) {
+        outcome.state = QStringLiteral("network_error");
+        outcome.status = timedOut
+                             ? QStringLiteral("反馈解析请求超时，请使用下方手动打分保存。")
+                             : QStringLiteral("反馈解析连接失败：%1。请使用下方手动打分保存。")
+                                   .arg(networkError.trimmed());
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    QJsonObject contractObject;
+    QString validationError;
+    if (!extractContractObjectFromApiResponse(responseBody, &contractObject,
+                                              &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈返回内容不是严格 JSON：%1。请使用下方手动打分保存。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!validateExactKeys(contractObject, kFeedbackTopLevelKeys, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈 JSON 顶层结构非法：%1。请使用下方手动打分保存。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QString version =
+        contractObject.value(QStringLiteral("version")).toString().trimmed();
+    if (version != QStringLiteral("feedback_parser_v1")) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈 JSON version 非法，请使用下方手动打分保存。");
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!contractObject.value(QStringLiteral("result")).isObject()) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈 JSON result 结构非法，请使用下方手动打分保存。");
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QJsonObject resultObject =
+        contractObject.value(QStringLiteral("result")).toObject();
+    if (!validateExactKeys(resultObject, kFeedbackResultKeys, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈 JSON result 字段非法：%1。请使用下方手动打分保存。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    FeedbackParseResult parsedResult = neutralFeedbackParseResult();
+    if (!readAllowedInt(resultObject, QStringLiteral("fullnessLevel"),
+                        kFeedbackScoreValues, &parsedResult.fullnessLevel,
+                        &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("sleepinessLevel"),
+                        kFeedbackScoreValues, &parsedResult.sleepinessLevel,
+                        &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("comfortLevel"),
+                        kFeedbackScoreValues, &parsedResult.comfortLevel,
+                        &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("focusImpactLevel"),
+                        kFeedbackScoreValues, &parsedResult.focusImpactLevel,
+                        &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("tasteRating"),
+                        kFeedbackScoreValues, &parsedResult.tasteRating,
+                        &validationError) ||
+        !readAllowedInt(resultObject, QStringLiteral("repeatWillingness"),
+                        kFeedbackScoreValues, &parsedResult.repeatWillingness,
+                        &validationError) ||
+        !readRequiredBool(resultObject, QStringLiteral("wouldEatAgain"),
+                          &parsedResult.wouldEatAgain, &validationError) ||
+        !readRequiredString(resultObject, QStringLiteral("freeTextFeedback"),
+                            &parsedResult.freeTextFeedback, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("反馈 JSON 值非法：%1。请使用下方手动打分保存。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (parsedResult.freeTextFeedback.trimmed().isEmpty()) {
+        parsedResult.freeTextFeedback = sourceText.trimmed();
+    }
+
+    outcome.result = parsedResult;
+    outcome.state = QStringLiteral("success");
+    outcome.status = QStringLiteral("反馈解析成功，正在保存。");
+    outcome.accepted = true;
+    return outcome;
 }
 
 RecommendationEngine::SupplementParseOutcome
@@ -2767,6 +3129,143 @@ RecommendationEngine::evaluateSupplementResponse(const QString &sourceText,
     return outcome;
 }
 
+void RecommendationEngine::testLlmConnection(const QString &apiKey,
+                                             const QString &apiUrl,
+                                             const QString &model)
+{
+    if (m_llmConnectionTestBusy) {
+        return;
+    }
+
+    const QString effectiveApiKey = trimmedOrFallback(apiKey, AppConfig::llmApiKey());
+    const QString effectiveApiUrl = trimmedOrFallback(apiUrl, AppConfig::llmApiUrl());
+    const QString effectiveModel = trimmedOrFallback(model, AppConfig::llmModel());
+
+    const auto finishWithoutRequest = [this](const QString &state,
+                                             const QString &status) {
+        m_llmConnectionTestBusy = false;
+        m_llmConnectionTestState = state;
+        m_llmConnectionTestStatus = status;
+        emit llmConnectionTestChanged();
+    };
+
+    if (effectiveApiKey.isEmpty()) {
+        finishWithoutRequest(QStringLiteral("unconfigured"),
+                             QStringLiteral("连接测试未开始：API Key 为空。"));
+        return;
+    }
+    if (effectiveApiUrl.isEmpty()) {
+        finishWithoutRequest(QStringLiteral("invalid_config"),
+                             QStringLiteral("连接测试未开始：API URL 为空。"));
+        return;
+    }
+    if (effectiveModel.isEmpty()) {
+        finishWithoutRequest(QStringLiteral("invalid_config"),
+                             QStringLiteral("连接测试未开始：Model 为空。"));
+        return;
+    }
+
+    const QUrl url(effectiveApiUrl);
+    if (!url.isValid() || url.scheme().isEmpty() || url.host().isEmpty()) {
+        finishWithoutRequest(QStringLiteral("invalid_config"),
+                             QStringLiteral("连接测试未开始：API URL 格式不正确。"));
+        return;
+    }
+
+    m_llmConnectionTestBusy = true;
+    m_llmConnectionTestState = QStringLiteral("testing");
+    m_llmConnectionTestStatus = QStringLiteral("正在测试 LLM 连接...");
+    emit llmConnectionTestChanged();
+
+    QNetworkRequest request{url};
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/json"));
+    request.setRawHeader("Authorization",
+                         QStringLiteral("Bearer %1").arg(effectiveApiKey).toUtf8());
+
+    QJsonArray messages;
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("system")},
+        {QStringLiteral("content"),
+         QStringLiteral("You are a connection test endpoint. Reply briefly.")}
+    });
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("user")},
+        {QStringLiteral("content"),
+         QStringLiteral("Reply with OK if this chat-completions request works.")}
+    });
+
+    QJsonObject payload{
+        {QStringLiteral("model"), effectiveModel},
+        {QStringLiteral("messages"), messages},
+        {QStringLiteral("temperature"), 0},
+        {QStringLiteral("max_tokens"), 8}
+    };
+
+    QNetworkReply *reply = m_networkAccessManager.post(
+        request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (!reply->isFinished()) {
+            reply->setProperty("mealadvisorTimedOut", true);
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kConnectionTestTimeoutMs);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, effectiveModel]() {
+        const QByteArray responseBody = reply->readAll();
+        const bool timedOut = reply->property("mealadvisorTimedOut").toBool();
+        const int httpStatus =
+            reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QNetworkReply::NetworkError replyError = reply->error();
+        const QString errorString = reply->errorString();
+        reply->deleteLater();
+
+        m_llmConnectionTestBusy = false;
+
+        if (timedOut) {
+            m_llmConnectionTestState = QStringLiteral("network_error");
+            m_llmConnectionTestStatus =
+                QStringLiteral("连接测试超时：10 秒内没有收到响应。");
+            emit llmConnectionTestChanged();
+            return;
+        }
+
+        if (replyError != QNetworkReply::NoError) {
+            const QString detail = providerErrorDetail(responseBody);
+            const QString prefix = httpStatus > 0
+                                       ? QStringLiteral("连接测试失败（HTTP %1）")
+                                             .arg(httpStatus)
+                                       : QStringLiteral("连接测试失败");
+            m_llmConnectionTestState = QStringLiteral("network_error");
+            m_llmConnectionTestStatus =
+                detail.isEmpty()
+                    ? QStringLiteral("%1：%2。").arg(prefix, errorString)
+                    : QStringLiteral("%1：%2；%3。").arg(prefix, errorString, detail);
+            emit llmConnectionTestChanged();
+            return;
+        }
+
+        QString responseError;
+        if (!chatCompletionResponseLooksValid(responseBody, &responseError)) {
+            m_llmConnectionTestState = QStringLiteral("invalid_response");
+            m_llmConnectionTestStatus =
+                QStringLiteral("连接成功，但响应格式异常：%1").arg(responseError);
+            emit llmConnectionTestChanged();
+            return;
+        }
+
+        m_llmConnectionTestState = QStringLiteral("success");
+        m_llmConnectionTestStatus =
+            QStringLiteral("连接测试成功：%1 可以返回 Chat Completions 响应。")
+                .arg(effectiveModel);
+        emit llmConnectionTestChanged();
+    });
+}
+
 void RecommendationEngine::parseSupplement(const QString &text)
 {
     const QString trimmedText = text.trimmed();
@@ -2861,6 +3360,93 @@ void RecommendationEngine::parseSupplement(const QString &text)
     });
 }
 
+void RecommendationEngine::parseFeedback(const QString &text, const QString &mealSummary)
+{
+    const QString trimmedText = text.trimmed();
+    if (trimmedText.isEmpty()) {
+        m_feedbackParseState = apiConfigured() ? QStringLiteral("ready")
+                                               : QStringLiteral("unconfigured");
+        m_feedbackParseFallbackActive = false;
+        m_feedbackParseStatus =
+            QStringLiteral("先写一句饭后感受，或者直接使用下方手动打分。");
+        m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
+        emit feedbackParseChanged();
+        return;
+    }
+
+    if (!apiConfigured()) {
+        FeedbackParseOutcome outcome;
+        outcome.result = neutralFeedbackParseResult();
+        outcome.result.freeTextFeedback = trimmedText;
+        outcome.state = QStringLiteral("unconfigured");
+        outcome.status = QStringLiteral(
+            "LLM API 未配置，无法自动解析反馈。请使用下方手动打分保存。");
+        outcome.fallbackUsed = true;
+        applyFeedbackOutcome(outcome);
+        return;
+    }
+
+    m_feedbackParseBusy = true;
+    m_feedbackParseState = QStringLiteral("parsing");
+    m_feedbackParseFallbackActive = false;
+    m_feedbackParseStatus = QStringLiteral("正在解析饭后反馈...");
+    m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
+    emit feedbackParseChanged();
+
+    QNetworkRequest request{QUrl(AppConfig::llmApiUrl())};
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/json"));
+    request.setRawHeader("Authorization",
+                         QStringLiteral("Bearer %1")
+                             .arg(AppConfig::llmApiKey())
+                             .toUtf8());
+
+    QJsonArray messages;
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("system")},
+        {QStringLiteral("content"), feedbackParserSystemPrompt()}
+    });
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("user")},
+        {QStringLiteral("content"), feedbackParserUserPrompt(mealSummary, trimmedText)}
+    });
+
+    QJsonObject payload{
+        {QStringLiteral("model"), AppConfig::llmModel()},
+        {QStringLiteral("messages"), messages},
+        {QStringLiteral("temperature"), 0},
+        {QStringLiteral("response_format"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("json_object")}}}
+    };
+
+    QNetworkReply *reply = m_networkAccessManager.post(
+        request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (!reply->isFinished()) {
+            reply->setProperty("mealadvisorTimedOut", true);
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kFeedbackTimeoutMs);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, trimmedText]() {
+        const QByteArray responseBody = reply->readAll();
+        const QString networkError = reply->error() == QNetworkReply::NoError
+                                         ? QString()
+                                         : reply->errorString();
+        const bool timedOut = reply->property("mealadvisorTimedOut").toBool();
+        reply->deleteLater();
+        setFeedbackParseBusy(false);
+
+        applyFeedbackOutcome(
+            evaluateFeedbackResponse(trimmedText, responseBody, networkError,
+                                     timedOut));
+    });
+}
+
 void RecommendationEngine::clearSupplement()
 {
     m_adjustment = neutralSupplementAdjustment();
@@ -2872,6 +3458,17 @@ void RecommendationEngine::clearSupplement()
                                         : QStringLiteral("unconfigured");
     m_supplementWeights.clear();
     emit supplementChanged();
+}
+
+void RecommendationEngine::clearFeedbackParse()
+{
+    m_feedbackParseBusy = false;
+    m_feedbackParseFallbackActive = false;
+    m_feedbackParseState = apiConfigured() ? QStringLiteral("ready")
+                                           : QStringLiteral("unconfigured");
+    m_feedbackParseStatus = QStringLiteral("反馈解析未开始。");
+    m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
+    emit feedbackParseChanged();
 }
 
 void RecommendationEngine::setWeightOverrides(const QVariantMap &overrides)
@@ -2918,6 +3515,16 @@ void RecommendationEngine::setBusy(bool busy)
     emit busyChanged();
 }
 
+void RecommendationEngine::setFeedbackParseBusy(bool busy)
+{
+    if (m_feedbackParseBusy == busy) {
+        return;
+    }
+
+    m_feedbackParseBusy = busy;
+    emit feedbackParseChanged();
+}
+
 void RecommendationEngine::setInitialState()
 {
     m_adjustment = neutralSupplementAdjustment();
@@ -2931,7 +3538,16 @@ void RecommendationEngine::setInitialState()
                                         : QStringLiteral("unconfigured");
     m_supplementFallbackActive = false;
     m_supplementWeights.clear();
+    m_feedbackParseBusy = false;
+    m_feedbackParseState = apiConfigured() ? QStringLiteral("ready")
+                                           : QStringLiteral("unconfigured");
+    m_feedbackParseStatus = QStringLiteral("反馈解析未开始。");
+    m_feedbackParseFallbackActive = false;
+    m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
     m_activeWeightConfig.clear();
+    m_llmConnectionTestBusy = false;
+    m_llmConnectionTestState = QStringLiteral("idle");
+    m_llmConnectionTestStatus = QStringLiteral("连接测试未开始。");
 }
 
 void RecommendationEngine::applySupplementOutcome(
@@ -2967,4 +3583,14 @@ void RecommendationEngine::applySupplementOutcome(
 
     m_adjustment.summary = m_supplementSummary;
     emit supplementChanged();
+}
+
+void RecommendationEngine::applyFeedbackOutcome(
+    const FeedbackParseOutcome &outcome)
+{
+    m_feedbackParseState = outcome.state;
+    m_feedbackParseStatus = outcome.status;
+    m_feedbackParseFallbackActive = outcome.fallbackUsed;
+    m_parsedFeedback = feedbackResultToVariantMap(outcome.result);
+    emit feedbackParseChanged();
 }

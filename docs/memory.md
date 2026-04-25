@@ -1,6 +1,6 @@
 ﻿# Project Memory
 
-Last updated: `2026-04-25`
+Last updated: `2026-04-26`
 
 ## Update Rule
 
@@ -87,6 +87,49 @@ If the current task changes project direction or major behavior, also update
   Meals has an explicit clear-search path for empty dish-picker results, and
   Meals save can now be clicked with no selected dishes so the existing C++
   guardrail message is reachable instead of hidden behind a disabled button
+- Stage 7 Android packaging preflight has now produced a verified arm64 debug
+  APK:
+  `build/android-arm64-debug/android-build/build/outputs/apk/debug/android-build-debug.apk`.
+  A small Android-only CMake include-order fix was required for NDK 27 libc++
+  headers after the Qt Android build added the raw NDK sysroot include path.
+  No device or configured emulator was available in this shell, so Android
+  install/launch and touch validation remain the next real runtime step.
+- A new Stage 7 frontend-direction plan has been captured in
+  `docs/chat-style-frontend-refactor-plan.md`. The next implementation prompt
+  now prioritizes a chat-style main page with `需求推荐` / `饭后反馈` modes, a
+  minimum-width-first half-width right drawer for LLM / schedule / food /
+  feedback management, and a light frosted-glass visual style.
+- The chat-style frontend shell has now landed in `app/qml/Main.qml`: visible
+  top tabs / `SwipeView` were replaced by a frosted-glass main page with
+  `需求推荐` and `饭后反馈` modes, a bottom multiline composer, parser-then-
+  recommendation sequencing, structured recent-meal feedback saving, and a
+  right-side management drawer for LLM debug / Schedule / Food / Meals.
+- The follow-up Stage 7 QML layout refinement has now simplified the main page
+  back to recommendation-first, moved structured `饭后反馈` into the right Drawer,
+  made Drawer section buttons consistently sized/aligned, made the LLM debug
+  action row stack/wrap predictably, and rebuilt/copied a refreshed Android
+  arm64 debug APK to the desktop.
+- The targeted Food / Feedback readability pass has now landed:
+  FoodPage's repeated low/medium/high dish-attribute selectors are visible
+  labeled fields, Drawer feedback is natural-language-first, and a bounded
+  strict-JSON `feedback_parser_v1` path maps successful LLM parses into the
+  existing `meal_feedback` fields while preserving manual scoring fallback.
+- The latest targeted mobile shell polish in `app/qml/Main.qml` removes the
+  header planning/budget line, fixes the bottom composer placeholder padding /
+  send-button clipping risk, and moves the main shell / Drawer shared controls
+  to a beige plus brown-yellow palette.
+- All QML text inputs now hide their placeholder while focused or populated
+  instead of letting the Android/Material style float the hint above the field.
+  `Main.qml` styled inputs use a separate `hintText` property; Food, Schedule,
+  and Meals plain inputs use the same focused-or-nonempty binding directly.
+- Drawer `LLM 调试` now has a front-end `测试连接` action. It calls
+  `RecommendationEngine::testLlmConnection(...)` with the current input values,
+  falls back to the existing AppConfig/env/default values for blank fields, and
+  reports testing/success/error state in the Drawer.
+- A generated warm beige / brown-yellow launcher icon has been added to the
+  project resource library at `resources/icons/mealadvisor-launcher-source.png`
+  and packaged into Android `mipmap-*` launcher resources under
+  `app/android/res/`.
 - Supplement parser UI state is now explicit enough to distinguish:
   unconfigured, parsing, success, invalid response, network failure, and
   fallback-to-default
@@ -1086,6 +1129,385 @@ Completion signal:
   - Android APK packaging was not run because this pass only touched QML/docs,
     with no Android-specific, packaging, build-system, or shared C++ logic
     changes
+- Continued Stage 7 with the first Android packaging pass:
+  - inspected the existing `build\android-arm64-debug` cache before changing
+    build files; it was configured for Qt `6.10.3`, `arm64-v8a`,
+    `android-35`, Ninja, JDK `21`, SDK build-tools `36.0.0`, and NDK
+    `27.2.12479018`
+  - reproduced an Android-only compile blocker where NDK 27 libc++ wrappers
+    failed after raw `sysroot/usr/include` appeared before
+    `sysroot/usr/include/c++/v1`
+  - fixed the blocker in `CMakeLists.txt` by adding an Android-only
+    `SYSTEM BEFORE` include for the active NDK libc++ header directory on the
+    `MealAdvisor` target
+  - built the arm64 debug APK successfully:
+    `build/android-arm64-debug/android-build/build/outputs/apk/debug/android-build-debug.apk`
+  - verified APK metadata with `aapt`: package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, native-code `arm64-v8a`
+  - checked `adb devices -l`; no real device or emulator was attached
+  - checked local AVD availability; no configured AVD was listed, so
+    install/launch and touch-path validation were skipped
+- Verification after the Android packaging fix:
+  - `cmake --build build\desktop-debug --target MealAdvisor` passed after the
+    CMake change
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - validation coverage in this pass was real Android APK packaging plus
+    static APK metadata inspection, desktop build regression, and local
+    mock/offline validation; Android runtime interaction was skipped because no
+    runnable device/emulator was available
+- Continued Stage 7 with the chat-style frontend refactor:
+  - rewrote `app/qml/Main.qml` from visible top `TabBar` + `SwipeView` into a
+    chat-style daily-use shell with `需求推荐` and `饭后反馈` mode buttons, a
+    chat/result area, and a bottom multiline composer
+  - recommendation mode now sends non-empty composer text through the existing
+    LLM supplement parser first, then automatically runs the existing local
+    recommendation engine when parsing finishes or falls back
+  - feedback mode selects from existing `mealLogManager.recentMeals`, exposes
+    existing structured 1-5 feedback fields, and saves through
+    `mealLogManager.saveMealFeedback(...)`; no LLM feedback parser or schema
+    change was added
+  - moved LLM config/debug, `SchedulePage`, `FoodPage`, and `MealLogPage` into
+    a right-side Drawer with half-width-preferred / 360px-minimum behavior and
+    full-width fallback on narrow windows
+  - applied a light frosted-glass visual direction with translucent panels,
+    readable contrast, and restrained green/neutral accents
+- Verification after the chat-style frontend refactor:
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor`
+  - real desktop smoke launch passed; `MealAdvisor.exe` stayed alive for
+    `5` seconds and emitted no captured QML stderr
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - Android APK packaging and runtime validation were not rerun in this pass
+    because the change was QML-only and desktop/runtime smoke was the targeted
+    regression path
+- Completed the pre-APK-build gate after the chat-style frontend refactor:
+  - confirmed the desktop target is up to date:
+    `cmake --build build\desktop-debug --target MealAdvisor`
+    returned `ninja: no work to do`
+  - real desktop smoke launch passed again; `MealAdvisor.exe` stayed alive for
+    `5` seconds and emitted no captured QML stderr
+  - `MealAdvisorValidation.exe` remained `36/38`; the same two known
+    non-blocking validation failures remain
+  - inspected the existing Android arm64 build cache: `arm64-v8a`,
+    `android-35`, Ninja, Qt host path `C:/Qt/6.10.3/mingw_64`
+  - confirmed the previously built APK is still present at
+    `build/android-arm64-debug/android-build/build/outputs/apk/debug/android-build-debug.apk`
+    with timestamp `2026-04-25 13:17:16`
+  - no APK rebuild was run in this gate; the next step can start the Android
+    arm64 APK build/rebuild directly
+- Built and refreshed the Android arm64 debug APK after the chat-style
+  frontend refactor:
+  - ran `cmake --build build\android-arm64-debug --target MealAdvisor_make_apk`
+    successfully
+  - generated APK:
+    `build/android-arm64-debug/android-build/build/outputs/apk/debug/android-build-debug.apk`
+  - APK size is `66326811` bytes and timestamp is `2026-04-25 18:28:58`
+  - `aapt dump badging` confirmed package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, and native-code `arm64-v8a`
+  - copied the generated APK over the desktop copy:
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - source and desktop APK SHA256 both match:
+    `F6B3FFBAC16B21B3BC4A3F27128E60E1BCE4FBE12A2B3B05DE11CAF7644B8223`
+- New Android screenshot/user feedback after the APK refresh:
+  - current QML layout is too crowded on mobile/landscape
+  - right Drawer content overlaps in the LLM debug section, especially summary
+    text and action buttons
+  - Drawer section buttons are not visually aligned or consistently sized
+  - the main page should be simplified and no longer expose 饭后反馈 as a
+    primary mode beside 需求推荐
+  - next frontend pass should move structured 饭后反馈 into the side Drawer,
+    keep the main page recommendation-first, and fix Drawer scrolling/wrapping
+    before the next APK build
+- Completed the follow-up Stage 7 QML layout refinement requested by the
+  Android screenshot feedback:
+  - kept the main page recommendation-first by hiding the visible two-mode
+    main-page switch and always loading the recommendation component in the
+    main result area
+  - moved the structured recent-meal `饭后反馈` editor into the right Drawer as
+    its own section, while keeping `MealLogPage` available separately as
+    `反馈与记录`
+  - changed Drawer section navigation to fixed-height grid buttons and changed
+    the LLM debug action row to a responsive grid so summary text and actions
+    no longer rely on a cramped free-flow row
+  - adjusted Drawer width rules so compact or short mobile/landscape surfaces
+    use an almost-full-width Drawer, while wider desktop surfaces keep a
+    half-width-style Drawer
+  - no schema, C++ recommendation logic, Stage 6 parser behavior, or feedback
+    parser capability was changed
+- Verification after the QML layout refinement:
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor`
+  - short desktop smoke launch passed; `MealAdvisor.exe` stayed alive for
+    `5` seconds and emitted no captured QML stderr
+  - an initial parallel validation/smoke attempt hit a transient SQLite
+    `database is locked`; rerunning validation alone restored the existing
+    `36/38` baseline with only the two known non-blocking failures
+  - rebuilt Android arm64 debug APK successfully with
+    `cmake --build build\android-arm64-debug --target MealAdvisor_make_apk`
+  - copied the generated APK to
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - `aapt dump badging` confirmed package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, and native-code `arm64-v8a`
+  - source and desktop APK SHA256 both match:
+    `248246B69DA58594E1732A04B171E798847B06E04B2A0F8719295B747B2F4958`
+  - `adb devices -l` still showed no attached device, so Android install,
+    launch, touch, keyboard, and scrolling validation remain pending
+- New Android screenshot feedback after the recommendation-first Drawer APK:
+  - the top-right Drawer button does not render correctly on Android; the
+    current QML uses a damaged text glyph (`鈽?`) as the ToolButton label, so
+    Android shows an unsupported / broken symbol instead of a clear menu icon
+  - the main page still exposes too much supplement-parser UI: the header
+    status, the `未配置` chip, `清空补充`, and `当前没有补充说明` make the page feel
+    like a debug/parser surface instead of a simple meal recommendation entry
+  - the empty recommendation preview is duplicated visually: the same
+    “点击生成推荐...” guidance appears in the main recommendation card and again
+    in a separate empty-state card
+  - the LLM debug Drawer still has overlapping text and controls; likely causes
+    are the long `appConfig.llmConfigSummary` / `recommendationEngine`
+    supplement labels staying in the same auto-height card as TextFields and
+    action buttons, plus Android text wrapping / implicit-height calculation
+    not expanding the card enough at the current Drawer width
+  - the Drawer feedback section also shows stacked text/control overlap near
+    the meal selector and checkbox area, suggesting the moved
+    `feedbackComponent` should not be embedded through a bare Loader inside a
+    ScrollView without a stronger content-width/implicit-height wrapper
+  - the next pass should be QML-only and should remove visible “补充说明”
+    surfaces from the main page, replace the broken top-right text glyph with a
+    robust menu affordance, and harden Drawer card/layout heights against
+    Android wrapping
+- Completed the targeted QML-only Android layout fix from that screenshot
+  feedback:
+  - replaced the top-right Drawer text glyph with a QML-drawn three-line menu
+    button, and replaced the Drawer close text glyph with a QML-drawn close
+    icon so Android rendering no longer depends on font glyph support
+  - removed visible supplement-parser debugging UI from the main page: the
+    header now uses app planning/budget status, the main recommendation card no
+    longer shows parser state chips, `清空补充`, supplement summary text, or
+    supplement weight chips, and the duplicate empty-state card was removed
+  - kept the bottom composer and existing parser-then-local-recommendation path
+    wired internally, but changed the busy button label to a neutral `处理中`
+  - split Drawer LLM debug into separate status/config and form cards, removed
+    nonessential supplement status text from that Drawer panel, and gave
+    TextFields/actions explicit stable heights
+  - hardened the Drawer feedback layout with explicit ComboBox/CheckBox/button
+    heights, one-column fallback for narrow score controls, and a real
+    ScrollView content wrapper instead of a bare Loader
+  - no C++, schema, recommendation scoring, Stage 6 parser contract, feedback
+    parser, OCR, rerank, or dish enrichment work was changed
+- Verification after the targeted QML-only fix:
+  - `git diff --check -- app/qml/Main.qml` passed
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor`
+  - `MealAdvisorValidation.exe` remains `36/38`; the only failures are still
+    the two known non-blocking baseline cases
+  - 5-second desktop smoke launch passed; the process stayed alive and captured
+    stderr was empty
+  - rebuilt Android arm64 debug APK successfully with
+    `cmake --build build\android-arm64-debug --target MealAdvisor_make_apk`
+  - copied the generated APK to
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - source and desktop APK SHA256 both match:
+    `B66CD47CCEC29ED62FFCF973A586AF46F934B0AC99BC5CBFFD432B392D5B7F6F`
+  - APK size is `66347675` bytes
+  - `aapt dump badging` confirmed package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, and native-code `arm64-v8a`
+  - the actual SDK path used for this check is
+    `C:\Users\Administrator\AppData\Local\Android\Sdk`
+  - `adb devices -l` still showed no attached devices, so Android install,
+    launch, touch, keyboard, and scrolling validation remain pending
+- New user screenshot feedback and product-direction request:
+  - In the Drawer `餐食配置` / FoodPage dish form, the visible repeated `低`
+    values are unlabeled level selectors. The current code order is:
+    `carbBox`, `fatBox`, `proteinBox`, `vitaminBox`, `fiberBox`,
+    `satietyBox`, `burdenBox`, `sleepinessBox`, `flavorBox`, and `odorBox`.
+    They mean 碳水、脂肪、蛋白、维生素、纤维、饱腹、消化负担、犯困风险、口味、
+    气味, each using the existing `low / medium / high` enum shown as
+    `低 / 中 / 高`.
+  - The screenshot makes clear that showing only `低` is not readable enough:
+    the user cannot tell which food attribute each selector controls, and the
+    semantics differ by field (`蛋白高` can be good, while `犯困风险高` is bad).
+  - The next UI pass should wrap each level selector in a labeled field, add a
+    short section title such as `菜品标签（低/中/高）`, keep the stored enum values
+    unchanged, and use Android-safe one-column / two-column responsive layout
+    so labels and controls never overlap.
+  - Numeric fields around the same form should also become clearer where
+    possible: for example `获取成本（1 容易 - 3 费事）` and
+    `餐次影响权重（普通餐 1.0，饮料/加餐可更低）`.
+  - The user also requested a behavior change for `饭后反馈`: feedback should
+    prefer natural-language LLM input first, and if the LLM cannot connect or
+    cannot return a valid parse, the app should fall back to concrete manual
+    score controls.
+  - This is a new planned capability beyond the previously avoided
+    feedback-parser scope. It should still preserve the local-first boundary:
+    no recommendation-core rewrite, no schema change unless a blocker is found,
+    no LLM rerank, and existing `meal_feedback` fields remain the persistence
+    target.
+  - Planned feedback flow:
+    1. User selects a recent meal.
+    2. Primary input is a free-text feedback TextArea.
+    3. Primary action tries an OpenAI-compatible strict-JSON feedback parser
+       using existing `AppConfig` LLM settings.
+    4. On parser success, map the structured result into existing feedback
+       fields: fullness, sleepiness, comfort, focus, would-eat-again, taste,
+       repeat willingness, and free text; then save through the existing
+       feedback save path.
+    5. On unconfigured API, network failure, timeout, auth failure, or invalid
+       JSON/contract, do not silently save neutral defaults; reveal the manual
+       score controls and keep the user's text so they can save concrete
+       scores.
+    6. Keep an explicit `手动打分` path available even when LLM is configured.
+  - Suggested feedback parser contract for the implementation prompt:
+    `feedback_parser_v1`, strict JSON only, fixed score values `1..5`,
+    `wouldEatAgain` boolean, optional concise normalized feedback text, and
+    neutral/manual fallback on any contract violation.
+  - This planned pass has now been implemented without changing schema,
+    recommendation-core scoring, LLM rerank behavior, OCR, or dish enrichment:
+    FoodPage wraps every dish level selector in a labeled field, adds
+    `菜品标签（低 / 中 / 高）` helper copy, and clarifies nearby numeric placeholders.
+  - Drawer `饭后反馈` now uses free-text feedback as the primary path. The primary
+    action calls a strict OpenAI-compatible `feedback_parser_v1` parser through
+    existing `AppConfig` settings. Successful parses save through the existing
+    `mealLogManager.saveMealFeedback(...)` path; unconfigured API, network
+    failure, timeout, non-JSON, missing fields, invalid scores, or invalid
+    booleans reveal the manual 1-5 scoring controls instead of saving neutral
+    defaults.
+  - A small follow-up screenshot pass fixed the main-page bottom composer
+    contrast by giving the TextArea a clear white field/background and using
+    the local readable button wrapper for the send button.
+  - Desktop visual checks were captured under `build/screenshots/` for the
+    main page, LLM Drawer, Food Drawer, Food tag section, and Feedback Drawer.
+    The inspected states did not show obvious app-side overlap or bare
+    unlabeled Food level selectors; one Feedback screenshot contained an
+    unrelated external GamePP overlay.
+  - Verification after this pass:
+    - `git diff --check` passed for the touched code/docs files
+    - desktop build target `MealAdvisor` and validation target
+      `MealAdvisorValidation` are up to date
+    - `MealAdvisorValidation.exe` reports `46/48`; all new feedback-parser
+      cases pass, and the only failures are still the two known non-blocking
+      baseline cases
+    - 5-second desktop smoke launch passed with empty captured stderr
+    - Android arm64 debug APK rebuilt and copied to
+      `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+    - source and desktop APK SHA256 both match:
+      `F12ED5FA86AF39AE2D3D8C7218FE0EF4CCB2EB6F36144B6CF515D5A966F785B4`
+    - APK size is `66399035` bytes, timestamp `2026-04-25 23:51:55`
+    - `aapt dump badging` confirmed package
+      `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+      `targetSdkVersion 36`, and native-code `arm64-v8a`
+    - `adb devices -l` showed no attached device, and
+      `emulator -list-avds` returned no configured AVD, so Android install,
+      launch, touch, keyboard, and screenshot validation remain blocked.
+  - A follow-up Test Android Apps pass using the `android-emulator-qa` flow was
+    run after the plugin was available. The environment state was unchanged:
+    `adb devices -l` returned only the device-list header, and
+    `emulator -list-avds` returned no AVD names. The APK was not installed or
+    launched. Source and desktop APK SHA256 were rechecked and still match
+    `F12ED5FA86AF39AE2D3D8C7218FE0EF4CCB2EB6F36144B6CF515D5A966F785B4`;
+    `aapt dump badging` still reports package
+    `org.qtproject.example.MealAdvisor`,
+    `minSdkVersion 28`, `targetSdkVersion 36`, launchable activity
+    `org.qtproject.qt.android.bindings.QtActivity`, and native-code
+    `arm64-v8a`.
+  - A targeted `Main.qml` visual polish pass then addressed the supplied mobile
+    screenshot:
+    - hid the header planning/budget summary line under `MealAdvisor`
+    - replaced the bottom composer with a padded `StyledTextArea` so the hint
+      stays inside the input instead of touching the border or overlapping the
+      cursor
+    - widened and restyled the send button as a rectangular primary action so
+      the label is not ellipsized
+    - moved the main shell, Drawer buttons, cards, text fields, and text areas
+      from the green palette to a Claude-like beige / brown-yellow palette with
+      more consistent radii and borders
+    - Desktop build passed for `MealAdvisor` and `MealAdvisorValidation`
+    - A first validation attempt was blocked by a concurrent smoke process
+      locking SQLite; the validation was rerun serially and returned `46/48`
+      with only the two known non-blocking baseline failures
+    - 5-second desktop smoke launch passed with empty stderr
+    - Android arm64 debug APK rebuilt and copied to
+      `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+    - source and desktop APK SHA256 both match
+      `F68DC057BFE10E5F736AF2A69E58E4A5C5FDD1F48833A460FBCABF877936F618`
+    - APK size is `66402219` bytes, timestamp `2026-04-26 00:31`
+    - `aapt dump badging` still reports package
+      `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+      `targetSdkVersion 36`, launchable activity
+      `org.qtproject.qt.android.bindings.QtActivity`, and native-code
+      `arm64-v8a`
+    - `adb devices -l` still returned no attached devices and
+      `emulator -list-avds` still returned no configured AVD names, so Android
+      install/launch/touch/keyboard/screenshot validation remains blocked
+    - A desktop window screenshot attempt captured the desktop background
+      instead of the Qt window, so it was deleted and not treated as visual
+      evidence.
+  - Added the generated launcher icon to the resource library and Android
+    package:
+    - source icon saved at `resources/icons/mealadvisor-launcher-source.png`
+    - Android mipmap launcher PNGs generated at
+      `app/android/res/mipmap-mdpi/ic_launcher.png`,
+      `mipmap-hdpi`, `mipmap-xhdpi`, `mipmap-xxhdpi`, and `mipmap-xxxhdpi`
+    - added `app/android/AndroidManifest.xml` with
+      `android:icon="@mipmap/ic_launcher"` on the application and activity
+    - set `QT_ANDROID_PACKAGE_SOURCE_DIR` and `QT_ANDROID_APP_ICON` on the
+      Android `MealAdvisor` target in `CMakeLists.txt`
+    - set Qt CMake policy `QTP0002` to `NEW` to avoid the Android deployment
+      path dev warning
+    - Android arm64 debug APK rebuilt and copied to
+      `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+    - source and desktop APK SHA256 both match
+      `900BAE252B06BA94DC141D6514A043122E2270FB9E0BCBB645EABF08FBA6A321`
+    - APK size is `66402625` bytes, timestamp `2026-04-26 01:16`
+    - `aapt dump badging` now reports `application-icon-160`,
+      `application-icon-240`, `application-icon-320`, `application-icon-480`,
+      and `application-icon-640`, with application and launchable activity
+      icon paths resolving to `res/mipmap-*-v4/ic_launcher.png`
+    - Desktop build target still configures/builds, and
+      `MealAdvisorValidation.exe` remains `46/48` with only the same two known
+      non-blocking baseline failures.
+  - A targeted input / LLM debug pass then addressed the latest Android
+    screenshot feedback:
+    - `Main.qml` styled text fields/areas now use `hintText`, while every
+      direct `placeholderText` binding in `FoodPage.qml`, `SchedulePage.qml`,
+      and `MealLogPage.qml` now returns an empty string whenever the control is
+      focused or already has text. This prevents the Android/Material floating
+      hint behavior across the app.
+    - Drawer `LLM 调试` now includes `测试连接`; it tests the current API
+      Key / URL / Model fields without forcing a save first, while blank fields
+      still fall back through the existing `AppConfig` / environment-variable
+      chain.
+    - `RecommendationEngine` now exposes `llmConnectionTestState`,
+      `llmConnectionTestStatus`, and `llmConnectionTestBusy`, plus an
+      OpenAI-compatible lightweight Chat Completions test request with a
+      10-second timeout.
+    - `MealAdvisorValidation.exe` now includes two mock-server tests for the
+      connection test request and response path. The latest run reports
+      `48/50`; the only failures remain the two known non-blocking baseline
+      cases: non-LLM relaxed high-budget dinner does not lift hotpot into
+      top-3, and sparse seeded feedback does not emit
+      `sleepiness_watch` / `stable_favorites` / `low_repeat`.
+    - Desktop build target `MealAdvisor` and validation target
+      `MealAdvisorValidation` both build successfully.
+    - 5-second desktop smoke launch passed with empty stderr.
+    - Android arm64 debug APK rebuilt and copied to
+      `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`.
+    - Source and desktop APK SHA256 both match:
+      `99C45E2FE1AC1B4E894CBB43711AB2BD6B470A20C641DA5DDD12E3AE655BF19B`.
+    - APK size is `66436201` bytes, timestamp `2026-04-26 01:30:04`.
+    - `aapt dump badging` still reports package
+      `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+      `targetSdkVersion 36`, launcher icons under `res/mipmap-*-v4`,
+      launchable activity `org.qtproject.qt.android.bindings.QtActivity`, and
+      native-code `arm64-v8a`.
+    - `adb devices -l` still returned no attached device, and
+      `emulator -list-avds` still returned no configured AVD names, so Android
+      install/launch/touch/keyboard/screenshot validation remains blocked.
 
 ## Next Steps
 
@@ -1095,19 +1517,39 @@ Priority note:
   expanding Stage 6 or the recommendation core unless a new real regression is
   found.
 
-1. Move Stage 7 to Android packaging and on-device/touch validation now that
-   the final desktop preflight has no new runtime blocker: build the arm64 APK,
-   install/run it if a device or emulator is available, and focus on native
-   screen sizing, touch scrolling, keyboard entry, and save/edit paths.
-2. Keep the two known validation failures classified correctly:
+Immediate next work:
+
+- Attach a real Android device or create an AVD, install the latest APK, and
+  validate the launcher icon, updated beige main shell, placeholder hiding
+  while typing, Drawer LLM connection test, Food labels, and Feedback
+  LLM/manual fallback with screenshots, UI-tree inspection, keyboard entry,
+  scrolling, and portrait/landscape checks.
+
+1. Run real Android runtime validation on an attached device or newly
+   configured AVD. Use adb/UI-tree-derived coordinates, screenshots, and
+   logcat if anything crashes.
+2. Focus the Android pass on the newly changed surfaces: the main header should
+   no longer show the planning/budget line; placeholder hints should disappear
+   while any input is focused or populated instead of floating above the field;
+   Drawer `LLM 调试` should show a usable `测试连接` status; Food tags must show
+   labels rather than bare `低 / 中 / 高`; and Drawer `饭后反馈` must support both
+   LLM parse/save and manual fallback/save. Also confirm Android launcher and
+   recents icons show the new meal-bowl icon instead of a blank/default icon.
+3. Keep any follow-up fix QML-only and tightly scoped unless Android evidence
+   reveals a real C++ or persistence bug.
+4. Keep the feedback parser local-first and bounded: strict JSON parser only,
+   existing `AppConfig` settings, existing `meal_feedback` persistence, no
+   recommendation-core rewrite, no LLM rerank, and no schema change unless a
+   concrete blocker is found.
+5. Keep the two known validation failures classified correctly:
    the non-LLM high-budget dinner case is a local recommendation/context
    limitation, and the missing `sleepiness_watch` / `stable_favorites` /
    `low_repeat` insight case is sparse-data heuristic behavior.
-3. If a real provider key is available in a later window, optionally replay
-   the same six DeepSeek samples once more, but do not block Stage 7 on that
-   unless the provider output regresses.
-4. Continue avoiding dish enrichment, OCR, schema redesign, feedback parser,
-   rerank, or recommendation-core rewrite until Stage 7 basics are stable.
+6. If a real provider key is available in a later window, optionally run one
+   live Drawer feedback parse sample, but do not block Stage 7 on provider
+   replay unless the strict parser contract regresses.
+7. Continue avoiding dish enrichment, OCR, schema redesign, LLM rerank, or
+   recommendation-core rewrite until Stage 7 basics are stable.
 
 ## Long-Task Plan
 
@@ -1145,8 +1587,11 @@ Use this sequence in the next window if continuing recommendation work:
   guardrail reachability. Remaining text/layout work should be targeted
   Android/runtime confirmation, not another broad sweep.
 - Android SDK / NDK / Qt environment is aligned locally and the arm64 APK build
-  has now been re-verified after the portability and packaging fixes; rerun it
-  again only if Android-specific code or the Qt/Gradle environment changes.
+  has now been re-verified after the portability and packaging fixes. The
+  current APK path is
+  `build/android-arm64-debug/android-build/build/outputs/apk/debug/android-build-debug.apk`.
+  The build currently depends on an Android-only CMake workaround that puts
+  NDK libc++ headers before the raw NDK sysroot include path.
 - The largest clearly user-visible damaged block found in this scan was the
   Meals-page insight helper copy in `src/core/meallogmanager.cpp`; that block
   has now been repaired, but older helper branches outside the scanned runtime
@@ -1179,6 +1624,17 @@ Use this sequence in the next window if continuing recommendation work:
   narrow-width and empty/search/save-path risks, but they are still not a
   substitute for a real Android touch pass with native screen sizing,
   keyboard entry, and scrolling.
+- Android install/launch validation is still blocked because `adb devices -l`
+  shows no attached device and `emulator -list-avds` returns no configured AVD
+  in this shell. The latest APK has been rebuilt, inspected with `aapt`, and
+  copied to the desktop, so the next confidence step is a real device or newly
+  configured AVD, not another packaging-only pass.
+- The simplified recommendation-first shell and Drawer feedback move have
+  build-level, validation-target, screenshot, and process-start smoke coverage.
+  The beige main shell polish, bottom composer overlap fix, new Food labels,
+  and LLM-first feedback flow still need real Android click/touch validation
+  for Drawer open/close, section switching, recommendation send, feedback
+  parse/manual fallback save, keyboard behavior, and narrow-screen scrolling.
 - The current recommendation baseline still does not raise
   `牛肉火锅单人套餐` into top-3 for the relaxed no-class high-budget dinner
   validation scenario, because that intent is not explicitly represented in the

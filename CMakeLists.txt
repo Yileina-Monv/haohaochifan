@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Qml Sql Network)
 
 qt_standard_project_setup(REQUIRES 6.5)
+qt_policy(SET QTP0002 NEW)
 qt_policy(SET QTP0004 NEW)
 
 qt_add_executable(MealAdvisor
@@ -95,6 +96,37 @@ target_link_libraries(MealAdvisor
         Qt6::Sql
         Qt6::Network
 )
+
+if (ANDROID)
+    set_target_properties(MealAdvisor PROPERTIES
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/app/android"
+        QT_ANDROID_APP_ICON "@mipmap/ic_launcher"
+    )
+
+    if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+        set(MEALADVISOR_ANDROID_LLVM_PREBUILT "windows-x86_64")
+    elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+        set(MEALADVISOR_ANDROID_LLVM_PREBUILT "darwin-x86_64")
+    else()
+        set(MEALADVISOR_ANDROID_LLVM_PREBUILT "linux-x86_64")
+    endif()
+
+    set(MEALADVISOR_ANDROID_NDK_ROOT "${ANDROID_NDK_ROOT}")
+    if (NOT MEALADVISOR_ANDROID_NDK_ROOT AND DEFINED CMAKE_ANDROID_NDK)
+        set(MEALADVISOR_ANDROID_NDK_ROOT "${CMAKE_ANDROID_NDK}")
+    endif()
+
+    set(MEALADVISOR_ANDROID_LIBCXX_INCLUDE
+        "${MEALADVISOR_ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${MEALADVISOR_ANDROID_LLVM_PREBUILT}/sysroot/usr/include/c++/v1"
+    )
+
+    if (EXISTS "${MEALADVISOR_ANDROID_LIBCXX_INCLUDE}")
+        target_include_directories(MealAdvisor
+            SYSTEM BEFORE PRIVATE
+                "${MEALADVISOR_ANDROID_LIBCXX_INCLUDE}"
+        )
+    endif()
+endif()
 
 if (NOT ANDROID)
     target_link_libraries(MealAdvisorValidation

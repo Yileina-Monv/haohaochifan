@@ -562,6 +562,22 @@ struct ParseScenarioResult {
     QByteArray requestBody;
 };
 
+struct FeedbackParseScenarioResult {
+    bool completed = false;
+    QString state;
+    QString status;
+    bool fallbackActive = false;
+    QVariantMap parsedFeedback;
+    QByteArray requestBody;
+};
+
+struct ConnectionTestScenarioResult {
+    bool completed = false;
+    QString state;
+    QString status;
+    QByteArray requestBody;
+};
+
 ParseScenarioResult runParseScenario(RecommendationEngine *engine,
                                      MockOpenAiServer *server,
                                      const QString &text,
@@ -581,6 +597,53 @@ ParseScenarioResult runParseScenario(RecommendationEngine *engine,
     result.status = engine->supplementStatus();
     result.summary = engine->supplementSummary();
     result.fallbackActive = engine->supplementFallbackActive();
+    result.requestBody = server->lastRequestBody();
+    return result;
+}
+
+FeedbackParseScenarioResult runFeedbackParseScenario(RecommendationEngine *engine,
+                                                     MockOpenAiServer *server,
+                                                     const QString &text,
+                                                     const QString &mealSummary,
+                                                     const MockHttpResponse &response,
+                                                     int timeoutMs = 18000)
+{
+    server->clearLastRequestBody();
+    server->enqueueResponse(response);
+
+    engine->clearFeedbackParse();
+    engine->parseFeedback(text, mealSummary);
+
+    FeedbackParseScenarioResult result;
+    result.completed =
+        waitForCondition([engine]() { return !engine->feedbackParseBusy(); }, timeoutMs);
+    result.state = engine->feedbackParseState();
+    result.status = engine->feedbackParseStatus();
+    result.fallbackActive = engine->feedbackParseFallbackActive();
+    result.parsedFeedback = engine->parsedFeedback();
+    result.requestBody = server->lastRequestBody();
+    return result;
+}
+
+ConnectionTestScenarioResult runConnectionTestScenario(RecommendationEngine *engine,
+                                                       MockOpenAiServer *server,
+                                                       const QString &apiKey,
+                                                       const QString &apiUrl,
+                                                       const QString &model,
+                                                       const MockHttpResponse &response,
+                                                       int timeoutMs = 12000)
+{
+    server->clearLastRequestBody();
+    server->enqueueResponse(response);
+
+    engine->testLlmConnection(apiKey, apiUrl, model);
+
+    ConnectionTestScenarioResult result;
+    result.completed =
+        waitForCondition([engine]() { return !engine->llmConnectionTestBusy(); },
+                         timeoutMs);
+    result.state = engine->llmConnectionTestState();
+    result.status = engine->llmConnectionTestStatus();
     result.requestBody = server->lastRequestBody();
     return result;
 }
@@ -1008,6 +1071,18 @@ int main(int argc, char *argv[])
                   .arg(recommendationEngine.supplementState(),
                        recommendationEngine.supplementStatus()));
 
+    recommendationEngine.clearFeedbackParse();
+    recommendationEngine.parseFeedback(QStringLiteral("味道不错但有点撑"),
+                                       QStringLiteral("午餐 | 测试菜品"));
+    addResult(&results,
+              QStringLiteral("Feedback parser reports unconfigured state and manual fallback"),
+              recommendationEngine.feedbackParseState() == QStringLiteral("unconfigured") &&
+                  recommendationEngine.feedbackParseFallbackActive() &&
+                  recommendationEngine.feedbackParseStatus().contains(QStringLiteral("手动打分")),
+              QStringLiteral("%1 | %2")
+                  .arg(recommendationEngine.feedbackParseState(),
+                       recommendationEngine.feedbackParseStatus()));
+
     appSettings.saveLlmSettings(QStringLiteral("test-key"),
                                 QStringLiteral("http://127.0.0.1:18080/v1/chat/completions"),
                                 QStringLiteral("deepseek-chat"));
@@ -1146,6 +1221,113 @@ int main(int argc, char *argv[])
               QStringLiteral("%1 | %2")
                   .arg(timeoutOutcome.state, timeoutOutcome.status));
 
+    const QJsonObject validFeedbackContract{
+        {QStringLiteral("version"), QStringLiteral("feedback_parser_v1")},
+        {QStringLiteral("result"),
+         QJsonObject{
+             {QStringLiteral("fullnessLevel"), 4},
+             {QStringLiteral("sleepinessLevel"), 2},
+             {QStringLiteral("comfortLevel"), 5},
+             {QStringLiteral("focusImpactLevel"), 4},
+             {QStringLiteral("tasteRating"), 5},
+             {QStringLiteral("repeatWillingness"), 4},
+             {QStringLiteral("wouldEatAgain"), true},
+             {QStringLiteral("freeTextFeedback"), QStringLiteral("味道不错，稍微有点撑。")}}}
+    };
+
+    const auto validFeedbackOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"), buildChatPayload(validFeedbackContract));
+    addResult(&results,
+              QStringLiteral("Feedback parser accepts valid structured result"),
+              validFeedbackOutcome.accepted &&
+                  validFeedbackOutcome.state == QStringLiteral("success") &&
+                  !validFeedbackOutcome.fallbackUsed &&
+                  validFeedbackOutcome.result.tasteRating == 5 &&
+                  validFeedbackOutcome.result.sleepinessLevel == 2,
+              QStringLiteral("%1 | %2")
+                  .arg(validFeedbackOutcome.state, validFeedbackOutcome.status));
+
+    const auto malformedFeedbackOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"),
+            QByteArray(
+                "{\"choices\":[{\"message\":{\"content\":\"not json\"}}]}"));
+    addResult(&results,
+              QStringLiteral("Feedback parser rejects non-JSON model output"),
+              !malformedFeedbackOutcome.accepted &&
+                  malformedFeedbackOutcome.state == QStringLiteral("invalid_response") &&
+                  malformedFeedbackOutcome.fallbackUsed,
+              QStringLiteral("%1 | %2")
+                  .arg(malformedFeedbackOutcome.state,
+                       malformedFeedbackOutcome.status));
+
+    const QJsonObject invalidFeedbackContract{
+        {QStringLiteral("version"), QStringLiteral("feedback_parser_v1")},
+        {QStringLiteral("result"),
+         QJsonObject{
+             {QStringLiteral("tasteRating"), 5},
+             {QStringLiteral("repeatWillingness"), 4}}}
+    };
+    const auto invalidFeedbackStructureOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"),
+            buildChatPayload(invalidFeedbackContract));
+    addResult(&results,
+              QStringLiteral("Feedback parser rejects missing fields"),
+              !invalidFeedbackStructureOutcome.accepted &&
+                  invalidFeedbackStructureOutcome.state == QStringLiteral("invalid_response") &&
+                  invalidFeedbackStructureOutcome.fallbackUsed,
+              QStringLiteral("%1 | %2")
+                  .arg(invalidFeedbackStructureOutcome.state,
+                       invalidFeedbackStructureOutcome.status));
+
+    QJsonObject invalidFeedbackValueContract = validFeedbackContract;
+    QJsonObject invalidFeedbackResult =
+        invalidFeedbackValueContract.value(QStringLiteral("result")).toObject();
+    invalidFeedbackResult.insert(QStringLiteral("sleepinessLevel"), 6);
+    invalidFeedbackResult.insert(QStringLiteral("wouldEatAgain"), QStringLiteral("true"));
+    invalidFeedbackValueContract.insert(QStringLiteral("result"), invalidFeedbackResult);
+    const auto invalidFeedbackValueOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"),
+            buildChatPayload(invalidFeedbackValueContract));
+    addResult(&results,
+              QStringLiteral("Feedback parser rejects invalid score or boolean values"),
+              !invalidFeedbackValueOutcome.accepted &&
+                  invalidFeedbackValueOutcome.state == QStringLiteral("invalid_response") &&
+                  invalidFeedbackValueOutcome.fallbackUsed,
+              QStringLiteral("%1 | %2")
+                  .arg(invalidFeedbackValueOutcome.state,
+                       invalidFeedbackValueOutcome.status));
+
+    const auto feedbackNetworkFailureOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"), QByteArray(),
+            QStringLiteral("Connection refused"), false);
+    addResult(&results,
+              QStringLiteral("Feedback parser falls back on network failure"),
+              !feedbackNetworkFailureOutcome.accepted &&
+                  feedbackNetworkFailureOutcome.state == QStringLiteral("network_error") &&
+                  feedbackNetworkFailureOutcome.fallbackUsed,
+              QStringLiteral("%1 | %2")
+                  .arg(feedbackNetworkFailureOutcome.state,
+                       feedbackNetworkFailureOutcome.status));
+
+    const auto feedbackTimeoutOutcome =
+        RecommendationEngine::evaluateFeedbackResponse(
+            QStringLiteral("味道不错但有点撑"), QByteArray(),
+            QStringLiteral("Operation canceled"), true);
+    addResult(&results,
+              QStringLiteral("Feedback parser falls back on timeout"),
+              !feedbackTimeoutOutcome.accepted &&
+                  feedbackTimeoutOutcome.state == QStringLiteral("network_error") &&
+                  feedbackTimeoutOutcome.fallbackUsed &&
+                  feedbackTimeoutOutcome.status.contains(QStringLiteral("超时")),
+              QStringLiteral("%1 | %2")
+                  .arg(feedbackTimeoutOutcome.state,
+                       feedbackTimeoutOutcome.status));
+
     appSettings.clearLlmSettings();
     qputenv("MEALADVISOR_LLM_API_KEY", QByteArray("env-key"));
     qputenv("MEALADVISOR_LLM_API_URL",
@@ -1199,6 +1381,53 @@ int main(int argc, char *argv[])
                                     mockServer.chatCompletionsUrl(),
                                     QStringLiteral("deepseek-chat"));
 
+        const QByteArray connectionTestPayload =
+            QJsonDocument(QJsonObject{
+                              {QStringLiteral("choices"),
+                               QJsonArray{
+                                   QJsonObject{
+                                       {QStringLiteral("message"),
+                                        QJsonObject{
+                                            {QStringLiteral("role"),
+                                             QStringLiteral("assistant")},
+                                            {QStringLiteral("content"),
+                                             QStringLiteral("OK")}}},
+                                       {QStringLiteral("finish_reason"),
+                                        QStringLiteral("stop")}}}}})
+                .toJson(QJsonDocument::Compact);
+        const ConnectionTestScenarioResult connectionTest =
+            runConnectionTestScenario(&recommendationEngine, &mockServer,
+                                      QStringLiteral("test-key"),
+                                      mockServer.chatCompletionsUrl(),
+                                      QStringLiteral("deepseek-chat"),
+                                      MockHttpResponse{200, connectionTestPayload,
+                                                       "application/json", 0});
+        addResult(&results,
+                  QStringLiteral("LLM connection test accepts mock chat-completions response"),
+                  connectionTest.completed &&
+                      connectionTest.state == QStringLiteral("success"),
+                  QStringLiteral("%1 | %2")
+                      .arg(connectionTest.state, connectionTest.status));
+
+        const QJsonObject capturedConnectionRequest =
+            parseJsonObject(connectionTest.requestBody);
+        const QJsonArray capturedConnectionMessages =
+            capturedConnectionRequest.value(QStringLiteral("messages")).toArray();
+        const bool connectionRequestShapeOk =
+            capturedConnectionRequest.value(QStringLiteral("model")).toString() ==
+                QStringLiteral("deepseek-chat") &&
+            capturedConnectionRequest.value(QStringLiteral("max_tokens")).toInt() == 8 &&
+            !capturedConnectionRequest.contains(QStringLiteral("response_format")) &&
+            capturedConnectionMessages.size() == 2 &&
+            capturedConnectionMessages.at(0).toObject().value(QStringLiteral("role")).toString() ==
+                QStringLiteral("system") &&
+            capturedConnectionMessages.at(1).toObject().value(QStringLiteral("role")).toString() ==
+                QStringLiteral("user");
+        addResult(&results,
+                  QStringLiteral("LLM connection test uses lightweight chat-completions payload"),
+                  connectionRequestShapeOk,
+                  QString::fromUtf8(connectionTest.requestBody));
+
         const ParseScenarioResult validParse = runParseScenario(
             &recommendationEngine, &mockServer,
             QStringLiteral("Need to stay awake for afternoon class and maybe drink cola."),
@@ -1238,6 +1467,93 @@ int main(int argc, char *argv[])
                   QStringLiteral("Supplement request uses chat-completions payload with strict JSON response_format"),
                   requestShapeOk,
                   QString::fromUtf8(validParse.requestBody));
+
+        const FeedbackParseScenarioResult feedbackParse = runFeedbackParseScenario(
+            &recommendationEngine, &mockServer,
+            QStringLiteral("味道不错但有点撑，饭后没有明显犯困。"),
+            QStringLiteral("午餐 | 测试菜品"),
+            MockHttpResponse{200, buildChatPayload(validFeedbackContract),
+                             "application/json", 0});
+        addResult(&results,
+                  QStringLiteral("Feedback parser real parse path accepts valid structured result"),
+                  feedbackParse.completed &&
+                      feedbackParse.state == QStringLiteral("success") &&
+                      !feedbackParse.fallbackActive &&
+                      feedbackParse.parsedFeedback.value(QStringLiteral("tasteRating")).toInt() == 5,
+                  QStringLiteral("%1 | %2")
+                      .arg(feedbackParse.state, feedbackParse.status));
+
+        const QJsonObject capturedFeedbackRequest =
+            parseJsonObject(feedbackParse.requestBody);
+        const QJsonArray capturedFeedbackMessages =
+            capturedFeedbackRequest.value(QStringLiteral("messages")).toArray();
+        const QString feedbackUserMessage =
+            capturedFeedbackMessages.size() >= 2
+                ? capturedFeedbackMessages.at(1)
+                      .toObject()
+                      .value(QStringLiteral("content"))
+                      .toString()
+                : QString();
+        const bool feedbackRequestShapeOk =
+            capturedFeedbackRequest.value(QStringLiteral("model")).toString() ==
+                QStringLiteral("deepseek-chat") &&
+            qFuzzyCompare(
+                capturedFeedbackRequest.value(QStringLiteral("temperature")).toDouble() + 1.0,
+                1.0) &&
+            capturedFeedbackRequest.value(QStringLiteral("response_format"))
+                    .toObject()
+                    .value(QStringLiteral("type"))
+                    .toString() == QStringLiteral("json_object") &&
+            capturedFeedbackMessages.size() == 2 &&
+            capturedFeedbackMessages.at(0).toObject().value(QStringLiteral("role")).toString() ==
+                QStringLiteral("system") &&
+            capturedFeedbackMessages.at(1).toObject().value(QStringLiteral("role")).toString() ==
+                QStringLiteral("user") &&
+            feedbackUserMessage.contains(QStringLiteral("Selected meal summary:")) &&
+            feedbackUserMessage.contains(QStringLiteral("User feedback text:"));
+        addResult(&results,
+                  QStringLiteral("Feedback request uses chat-completions payload with strict JSON response_format"),
+                  feedbackRequestShapeOk,
+                  QString::fromUtf8(feedbackParse.requestBody));
+
+        const QVariantMap targetFeedbackMeal = mealLogManager.recentMeals().isEmpty()
+                                                   ? QVariantMap()
+                                                   : mealLogManager.recentMeals()
+                                                         .first()
+                                                         .toMap();
+        const bool feedbackSaveOk =
+            !targetFeedbackMeal.isEmpty() &&
+            mealLogManager.saveMealFeedback(
+                targetFeedbackMeal.value(QStringLiteral("id")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("fullnessLevel")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("sleepinessLevel")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("comfortLevel")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("focusImpactLevel")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("wouldEatAgain")).toBool(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("tasteRating")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("repeatWillingness")).toInt(),
+                feedbackParse.parsedFeedback.value(QStringLiteral("freeTextFeedback")).toString());
+        const QVariantMap savedFeedback = feedbackSaveOk
+                                              ? mealLogManager.loadMealFeedback(
+                                                    targetFeedbackMeal
+                                                        .value(QStringLiteral("id"))
+                                                        .toInt())
+                                              : QVariantMap();
+        addResult(&results,
+                  QStringLiteral("Feedback parser successful output saves through existing feedback fields"),
+                  feedbackSaveOk &&
+                      savedFeedback.value(QStringLiteral("tasteRating")).toInt() == 5 &&
+                      savedFeedback.value(QStringLiteral("sleepinessLevel")).toInt() == 2 &&
+                      savedFeedback.value(QStringLiteral("freeTextFeedback")).toString().contains(
+                          QStringLiteral("味道不错")),
+                  feedbackSaveOk
+                      ? QStringLiteral("saved taste=%1 sleepiness=%2 text=%3")
+                            .arg(savedFeedback.value(QStringLiteral("tasteRating")).toInt())
+                            .arg(savedFeedback.value(QStringLiteral("sleepinessLevel")).toInt())
+                            .arg(savedFeedback
+                                     .value(QStringLiteral("freeTextFeedback"))
+                                     .toString())
+                      : mealLogManager.lastError());
 
         QJsonObject budgetRelaxContract = validContract;
         QJsonObject budgetRelaxResult;

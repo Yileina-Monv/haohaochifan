@@ -22,7 +22,15 @@ class RecommendationEngine : public QObject
     Q_PROPERTY(QString supplementState READ supplementState NOTIFY supplementChanged)
     Q_PROPERTY(bool supplementFallbackActive READ supplementFallbackActive NOTIFY supplementChanged)
     Q_PROPERTY(QVariantList supplementWeights READ supplementWeights NOTIFY supplementChanged)
+    Q_PROPERTY(QString feedbackParseStatus READ feedbackParseStatus NOTIFY feedbackParseChanged)
+    Q_PROPERTY(QString feedbackParseState READ feedbackParseState NOTIFY feedbackParseChanged)
+    Q_PROPERTY(bool feedbackParseBusy READ feedbackParseBusy NOTIFY feedbackParseChanged)
+    Q_PROPERTY(bool feedbackParseFallbackActive READ feedbackParseFallbackActive NOTIFY feedbackParseChanged)
+    Q_PROPERTY(QVariantMap parsedFeedback READ parsedFeedback NOTIFY feedbackParseChanged)
     Q_PROPERTY(QVariantList activeWeightConfig READ activeWeightConfig NOTIFY weightConfigChanged)
+    Q_PROPERTY(QString llmConnectionTestStatus READ llmConnectionTestStatus NOTIFY llmConnectionTestChanged)
+    Q_PROPERTY(QString llmConnectionTestState READ llmConnectionTestState NOTIFY llmConnectionTestChanged)
+    Q_PROPERTY(bool llmConnectionTestBusy READ llmConnectionTestBusy NOTIFY llmConnectionTestChanged)
 
 public:
     struct SupplementAdjustment
@@ -56,6 +64,27 @@ public:
         bool fallbackUsed = false;
     };
 
+    struct FeedbackParseResult
+    {
+        int fullnessLevel = 3;
+        int sleepinessLevel = 3;
+        int comfortLevel = 3;
+        int focusImpactLevel = 3;
+        int tasteRating = 3;
+        int repeatWillingness = 3;
+        bool wouldEatAgain = true;
+        QString freeTextFeedback;
+    };
+
+    struct FeedbackParseOutcome
+    {
+        FeedbackParseResult result;
+        QString state;
+        QString status;
+        bool accepted = false;
+        bool fallbackUsed = false;
+    };
+
     explicit RecommendationEngine(const DatabaseManager &databaseManager,
                                   AppSettings *appSettings = nullptr,
                                   QObject *parent = nullptr);
@@ -69,33 +98,55 @@ public:
     QString supplementState() const;
     bool supplementFallbackActive() const;
     QVariantList supplementWeights() const;
+    QString feedbackParseStatus() const;
+    QString feedbackParseState() const;
+    bool feedbackParseBusy() const;
+    bool feedbackParseFallbackActive() const;
+    QVariantMap parsedFeedback() const;
     QVariantList activeWeightConfig() const;
+    QString llmConnectionTestStatus() const;
+    QString llmConnectionTestState() const;
+    bool llmConnectionTestBusy() const;
 
     Q_INVOKABLE void reload();
     Q_INVOKABLE void runDecision();
     Q_INVOKABLE QString previewRecommendation() const;
     Q_INVOKABLE void parseSupplement(const QString &text);
+    Q_INVOKABLE void parseFeedback(const QString &text, const QString &mealSummary);
     Q_INVOKABLE void clearSupplement();
+    Q_INVOKABLE void clearFeedbackParse();
     Q_INVOKABLE void setWeightOverrides(const QVariantMap &overrides);
     Q_INVOKABLE void clearWeightOverrides();
     Q_INVOKABLE void refreshSupplementConfigState();
+    Q_INVOKABLE void testLlmConnection(const QString &apiKey,
+                                       const QString &apiUrl,
+                                       const QString &model);
 
     static SupplementAdjustment neutralSupplementAdjustment();
+    static FeedbackParseResult neutralFeedbackParseResult();
     static SupplementParseOutcome evaluateSupplementResponse(const QString &sourceText,
                                                             const QByteArray &responseBody,
                                                             const QString &networkError = QString(),
                                                             bool timedOut = false);
+    static FeedbackParseOutcome evaluateFeedbackResponse(const QString &sourceText,
+                                                        const QByteArray &responseBody,
+                                                        const QString &networkError = QString(),
+                                                        bool timedOut = false);
 
 signals:
     void recommendationsChanged();
     void supplementChanged();
+    void feedbackParseChanged();
     void busyChanged();
     void weightConfigChanged();
+    void llmConnectionTestChanged();
 
 private:
     void setBusy(bool busy);
+    void setFeedbackParseBusy(bool busy);
     void setInitialState();
     void applySupplementOutcome(const SupplementParseOutcome &outcome);
+    void applyFeedbackOutcome(const FeedbackParseOutcome &outcome);
 
     const DatabaseManager &m_databaseManager;
     AppSettings *m_appSettings = nullptr;
@@ -108,7 +159,15 @@ private:
     QString m_supplementState;
     bool m_supplementFallbackActive = false;
     QVariantList m_supplementWeights;
+    bool m_feedbackParseBusy = false;
+    QString m_feedbackParseStatus;
+    QString m_feedbackParseState;
+    bool m_feedbackParseFallbackActive = false;
+    QVariantMap m_parsedFeedback;
     QVariantList m_activeWeightConfig;
+    bool m_llmConnectionTestBusy = false;
+    QString m_llmConnectionTestStatus;
+    QString m_llmConnectionTestState;
     QVariantMap m_weightOverrides;
     SupplementAdjustment m_adjustment;
 };

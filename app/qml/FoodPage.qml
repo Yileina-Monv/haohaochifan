@@ -20,6 +20,37 @@ ScrollView {
             elide: Text.ElideRight
         }
     }
+
+    component LevelField: ColumnLayout {
+        id: levelField
+        property string label: ""
+        property alias currentIndex: box.currentIndex
+        property alias currentValue: box.currentValue
+        property alias count: box.count
+        property alias model: box.model
+
+        Layout.fillWidth: true
+        spacing: 5
+
+        Label {
+            Layout.fillWidth: true
+            text: levelField.label
+            color: "#4d5333"
+            font.pixelSize: 13
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        ComboBox {
+            id: box
+            Layout.fillWidth: true
+            Layout.preferredHeight: 42
+            model: root.levelOptions
+            textRole: "label"
+            valueRole: "value"
+        }
+    }
+
     id: root
     clip: true
 
@@ -379,13 +410,13 @@ ScrollView {
                     TextField {
                         id: merchantNameField
                         Layout.fillWidth: true
-                        placeholderText: "商家名"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "商家名"
                     }
 
                     TextField {
                         id: merchantAreaField
                         Layout.fillWidth: true
-                        placeholderText: "校区区域 / 楼栋"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "校区区域 / 楼栋"
                     }
 
                     ComboBox {
@@ -399,21 +430,21 @@ ScrollView {
                     TextField {
                         id: merchantDistanceField
                         Layout.fillWidth: true
-                        placeholderText: "步行分钟数"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "步行分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: merchantQueueField
                         Layout.fillWidth: true
-                        placeholderText: "排队分钟数"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "排队分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: merchantDeliveryField
                         Layout.fillWidth: true
-                        placeholderText: "外卖预计分钟数"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "外卖预计分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
                 }
@@ -442,7 +473,7 @@ ScrollView {
                     id: merchantNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-                    placeholderText: "可用性备注，例如档口活动、容易售罄、时段限制"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "可用性备注，例如档口活动、容易售罄、时段限制"
                     wrapMode: TextEdit.Wrap
                 }
 
@@ -508,7 +539,7 @@ ScrollView {
                     TextField {
                         id: dishNameField
                         Layout.fillWidth: true
-                        placeholderText: "菜品名"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "菜品名"
                     }
 
                     ComboBox {
@@ -522,13 +553,13 @@ ScrollView {
                     TextField {
                         id: dishCategoryField
                         Layout.fillWidth: true
-                        placeholderText: "分类"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "分类"
                     }
 
                     TextField {
                         id: dishPriceField
                         Layout.fillWidth: true
-                        placeholderText: "价格"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "价格"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
 
@@ -543,48 +574,72 @@ ScrollView {
                     TextField {
                         id: dishEatTimeField
                         Layout.fillWidth: true
-                        placeholderText: "用餐分钟数"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "用餐分钟数"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: dishEffortField
                         Layout.fillWidth: true
-                        placeholderText: "获取成本 1-3"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "获取成本（1 容易 - 3 费事）"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
                     TextField {
                         id: dishImpactField
                         Layout.fillWidth: true
-                        placeholderText: "餐次影响权重"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "餐次影响权重（普通餐 1.0，饮料/加餐可更低）"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    }
+                }
+
+                AutoHeightRectangle {
+                    Layout.fillWidth: true
+                    radius: 14
+                    color: "#f8f6e7"
+                    border.color: "#d8d3af"
+                    border.width: 1
+
+                    ColumnLayout {
+                        x: 12
+                        y: 12
+                        width: parent.width - 24
+                        height: implicitHeight
+                        spacing: 4
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "菜品标签（低 / 中 / 高）"
+                            color: "#36391f"
+                            font.bold: true
+                            wrapMode: Text.Wrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "这些是菜品特征，不是总评分；高蛋白/高纤维通常有利，高负担/高犯困风险通常不利。"
+                            color: "#6a6b45"
+                            wrapMode: Text.Wrap
+                        }
                     }
                 }
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: root.narrowLayout ? 2 : 3
+                    columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    ComboBox { id: carbBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: fatBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: proteinBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: vitaminBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: fiberBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: satietyBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: burdenBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: sleepinessBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                    ComboBox { id: flavorBox; Layout.fillWidth: true; model: root.levelOptions; textRole: "label"; valueRole: "value" }
-                }
-
-                ComboBox {
-                    id: odorBox
-                    Layout.fillWidth: true
-                    model: root.levelOptions
-                    textRole: "label"
-                    valueRole: "value"
+                    LevelField { id: carbBox; label: "碳水" }
+                    LevelField { id: fatBox; label: "脂肪" }
+                    LevelField { id: proteinBox; label: "蛋白" }
+                    LevelField { id: vitaminBox; label: "维生素" }
+                    LevelField { id: fiberBox; label: "纤维" }
+                    LevelField { id: satietyBox; label: "饱腹" }
+                    LevelField { id: burdenBox; label: "消化负担" }
+                    LevelField { id: sleepinessBox; label: "犯困风险" }
+                    LevelField { id: flavorBox; label: "口味" }
+                    LevelField { id: odorBox; label: "气味" }
                 }
 
                 Flow {
@@ -606,7 +661,7 @@ ScrollView {
                     id: dishNotesField
                     Layout.fillWidth: true
                     Layout.preferredHeight: 90
-                    placeholderText: "备注，例如口味、气味、适合场景"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "备注，例如口味、气味、适合场景"
                     wrapMode: TextEdit.Wrap
                 }
 
@@ -646,7 +701,7 @@ ScrollView {
 
                 TextField {
                     Layout.fillWidth: true
-                    placeholderText: "搜索商家、区域或备注"
+                    placeholderText: activeFocus || text.length > 0 ? "" : "搜索商家、区域或备注"
                     text: foodManager.merchantSearch
                     onTextChanged: foodManager.setMerchantSearch(text)
                 }
@@ -761,7 +816,7 @@ ScrollView {
                     TextField {
                         id: dishSearchField
                         Layout.fillWidth: true
-                        placeholderText: "搜索菜品、商家、风险标签或用餐方式"
+                        placeholderText: activeFocus || text.length > 0 ? "" : "搜索菜品、商家、风险标签或用餐方式"
                         text: foodManager.dishSearch
                         onTextChanged: foodManager.setDishSearch(text)
                     }
