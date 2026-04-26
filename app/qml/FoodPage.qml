@@ -508,44 +508,44 @@ ScrollView {
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    TextField {
+                    LabeledTextField {
                         id: merchantNameField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "商家名"
+                        label: "商家名"
+                        hintText: "例如：麦当劳北门店"
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: merchantAreaField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "校区区域 / 楼栋"
+                        label: "位置"
+                        hintText: "例如：宿舍楼下 / 北门"
                     }
 
-                    ComboBox {
+                    LabeledComboBox {
                         id: merchantPriceLevelBox
-                        Layout.fillWidth: true
+                        label: "价格档位"
                         model: root.priceLevelOptions
                         textRole: "label"
                         valueRole: "value"
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: merchantDistanceField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "步行分钟数"
+                        label: "步行时间"
+                        hintText: "分钟，例如：5"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: merchantQueueField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "排队分钟数"
+                        label: "排队时间"
+                        hintText: "分钟，例如：8"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: merchantDeliveryField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "外卖预计分钟数"
+                        label: "外卖预计"
+                        hintText: "分钟，例如：25"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
                 }
