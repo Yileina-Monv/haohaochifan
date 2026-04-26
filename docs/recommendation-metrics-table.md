@@ -2,6 +2,17 @@
 
 Last updated: `2026-04-19`
 
+Implementation note as of `2026-04-27`:
+
+- Recommendation V3 moves budget out of the default weighted score.
+- If the user does not mention budget, price is not rewarded or punished by
+  default.
+- If `budgetMode` is `strict` or `relaxed`, `budgetLimitYuan` becomes a budget
+  gate and over-line candidates receive a fixed `-40` score penalty while
+  remaining available as fallback candidates.
+- Acquisition / time cost remains part of scene feasibility, especially when a
+  later class exists.
+
 ## Scope
 
 This document defines the current Chinese-facing recommendation metrics,

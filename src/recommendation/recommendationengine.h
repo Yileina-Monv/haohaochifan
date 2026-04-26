@@ -48,6 +48,8 @@ public:
         double carbIntent = 1.0;
         double drinkIntent = 1.0;
         double budgetFlexIntent = 1.0;
+        QString budgetMode = QStringLiteral("none");
+        double budgetLimitYuan = 0.0;
         bool skipClassConstraint = false;
         double classConstraintWeight = 1.0;
         QString postMealSleepPlan = QStringLiteral("unknown");

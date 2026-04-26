@@ -39,6 +39,8 @@ You must always return exactly one JSON object with this shape:
     "carbIntent": 1.0,
     "drinkIntent": 1.0,
     "budgetFlexIntent": 1.0,
+    "budgetMode": "none",
+    "budgetLimitYuan": 0,
     "classConstraintWeight": 1.0,
     "postMealSleepPlan": "unknown",
     "plannedNapMinutes": 0,
@@ -90,6 +92,17 @@ Enum field:
 Allowed values:
 "stay_awake", "nap_before_class", "no_class", "unknown"
 
+Budget fields:
+- budgetMode must be one of "none", "strict", "relaxed"
+- budgetLimitYuan must be a number from 0 to 999
+- If no budget expression appears, set budgetMode to "none" and budgetLimitYuan to 0
+- Explicit amount such as "no more than 30" maps to strict + that amount
+- "budget very low" / "cheapest possible" maps to strict + 15
+- "control budget" / "cheap" / "not too expensive" maps to strict + 40
+- "very high budget" / "want something better" / "budget is high" maps to relaxed + 100
+- "budget does not matter" maps to relaxed + 100
+- High budget does not reward expensive dishes; it only raises the over-budget line
+
 Integer field:
 - plannedNapMinutes
 Allowed values:
@@ -106,7 +119,8 @@ Interpretation rules:
 - If the user explicitly mentions class soon, rushing to class, or needing a steady meal before class, raise `classConstraintWeight` above `1.0` instead of leaving it neutral.
 - If the user explicitly says they need to stay awake or avoid drowsiness, set `postMealSleepPlan = "stay_awake"` and usually raise `sleepNeedLevel` above `1.0` when the wording is strong.
 - If the user explicitly says they will nap before class and gives a duration, set `postMealSleepPlan = "nap_before_class"`, fill `plannedNapMinutes`, and use high `sleepPlanConfidence`.
-- If the user explicitly says budget can be relaxed, raise `budgetFlexIntent` above `1.0`; if the user explicitly wants cola, raise `colaIntent` above `1.0`.
+- If the user explicitly says budget can be relaxed, set `budgetMode = "relaxed"` and `budgetLimitYuan = 100`; `budgetFlexIntent` may stay `1.0` for compatibility.
+- If the user explicitly wants cola, raise `colaIntent` above `1.0`.
 
 Special priority rules:
 

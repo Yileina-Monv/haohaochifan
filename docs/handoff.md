@@ -22,6 +22,11 @@ The project has moved beyond a static scaffold and now includes:
 - `FoodManager` plus a working merchant/dish management page
 - `MealLogManager` plus a working meal logging page with multi-dish support
 - an upgraded V2 recommendation engine on the home page
+- the first V3 recommendation budget-gate pass inside the existing engine:
+  budget no longer participates in default weighted scoring, explicit
+  `budgetMode` / `budgetLimitYuan` inputs apply a fixed over-budget penalty,
+  and legacy `budgetFlexIntent` parser responses are still mapped for
+  compatibility
 - natural-language supplement parsing that can turn free text into temporary
   scoring weights through an OpenAI-compatible API
 - the Stage 6 supplement parser now follows the docs-backed
@@ -347,6 +352,17 @@ source and desktop APK SHA256 both match
 confirms package `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
 `targetSdkVersion 36`, launcher icons, launchable Qt activity, and native-code
 `arm64-v8a`.
+The latest V3 recommendation pass then changed the existing
+`RecommendationEngine` budget behavior instead of adding a parallel engine:
+budget is now a triggered gate, not a default scoring factor. The supplement
+parser prompt and strict response validation now include `budgetMode` and
+`budgetLimitYuan`; legacy 13-field parser responses still work through
+compatibility mapping. Normal ranking no longer rewards cheap dishes or
+punishes expensive dishes when budget is not mentioned. Triggered budgets keep
+over-line dishes as fallback candidates but apply a fixed `-40` score penalty
+and show a budget warning. Desktop build passed, `MealAdvisorValidation.exe`
+now reports `51/51`, and a 5-second desktop smoke launch produced empty
+stderr.
 
 ## Pages Implemented
 
@@ -422,6 +438,14 @@ next step from scratch.
   - longer non-breakfast multi-meal compensation
   - post-meal sleep-plan modifiers
   - Chinese-ready reasons and warnings
+- Recommendation V3 budget behavior now uses:
+  - `budgetMode = none | strict | relaxed`
+  - `budgetLimitYuan`
+  - no default price reward or price penalty when budget is not mentioned
+  - a fixed `-40` over-budget gate penalty when budget is triggered
+  - budget warnings only for triggered budget gates
+  - scene-fit handling for acquisition / long-meal cost so class-day lunch
+    pressure is not enforced through price
 - Recommendation runs are now persisted into `recommendation_records`
 - Meal feedback is now persisted and minimally editable from the Meals page
 - Dish-level historical feedback now feeds back into recommendation scoring
@@ -447,7 +471,8 @@ next step from scratch.
 - The parser response path now enforces:
   - strict JSON only
   - `version = supplement_parser_v1`
-  - exact 13-field `result`
+  - exact V3 `result` with `budgetMode` / `budgetLimitYuan`, while still
+    accepting the previous 13-field result for compatibility
   - allowed fixed-step values / enums / nap-minute set
   - neutral fallback on invalid output
 - `MealAdvisorValidation` now covers supplement parser fallback / success cases
@@ -519,7 +544,12 @@ next step from scratch.
     pass still need validation against longer real-data usage and Android
     touch interaction, even though the desktop build still compiles and the
     app starts locally.
-10. The current validated non-LLM recommendation baseline still keeps
+10. Superseded by the V3 pass: the latest validation baseline is `51/51`.
+    Relaxed no-class dinner can include `牛肉火锅单人套餐` in top-3, strict
+    budget input pushes over-line dinner candidates down, and seeded feedback
+    insights now include `sleepiness_watch`, `stable_favorites`, and
+    `low_repeat`.
+11. The current validated non-LLM recommendation baseline still keeps
     `牛肉火锅单人套餐` out of top-3 for a relaxed no-class high-budget dinner
     scenario, because that intent is not explicitly represented in the current
     non-LLM local context. The Stage 6 parsed `budgetFlexIntent` path now does

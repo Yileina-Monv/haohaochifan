@@ -161,6 +161,12 @@ If the current task changes project direction or major behavior, also update
   `docs/recommendation-metrics-table.md`
 - Recommendation Engine V2 Core has now been implemented inside the existing
   `RecommendationEngine` instead of a parallel engine
+- Recommendation V3 budget-gate logic has now landed in the existing engine:
+  budget is no longer a default weighted score, `budgetMode` /
+  `budgetLimitYuan` are accepted by the supplement parser, old
+  `budgetFlexIntent` responses are mapped for compatibility, and explicit
+  budget modes apply a fixed over-budget gate penalty instead of hard-filtering
+  candidates.
 - The scoring logic is no longer one large hard-coded formula:
   it now resolves group weights and sub-metric weights through a central
   weight/config structure with a reserved override interface for future UI
@@ -474,6 +480,33 @@ Completion signal:
 6. Finish Android packaging and release polish
 
 ## Recent Changes
+
+### `2026-04-27`
+
+- Implemented the initial V3 recommendation budget model:
+  - `RecommendationEngine::SupplementAdjustment` now includes `budgetMode`
+    and `budgetLimitYuan`
+  - the strict supplement parser accepts the new fields while still accepting
+    legacy 13-field responses and mapping non-neutral `budgetFlexIntent` to a
+    compatibility budget mode
+  - `group.budget_fit` is no longer part of normal total-score calculation and
+    the old default budget weight has moved into current-demand scoring
+  - explicit `strict` / `relaxed` budget modes apply a fixed `-40` over-budget
+    gate penalty and keep candidates as fallbacks
+  - acquisition / long-meal cost is now reinforced in scene fit so class-day
+    lunch still avoids slow heavy options without relying on price penalties
+  - recommendation breakdown shows `预算门槛` only when a budget gate is active
+  - over-budget warnings are only shown when the user actually triggered a
+    budget gate
+- Updated validation for the V3 parser/result shape and added a strict-budget
+  dinner regression case. Latest desktop verification:
+  - `cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation`
+    passed
+  - `MealAdvisorValidation.exe` passed `51/51`
+  - 5-second desktop smoke launch had empty stderr
+- Updated `docs/llm-supplement-prompt.md`,
+  `docs/recommendation-metrics-table.md`, and `docs/v3-plan.md` to reflect
+  the implemented budget-gate behavior.
 
 ### `2026-04-18`
 
@@ -1670,10 +1703,10 @@ available:
    existing `AppConfig` settings, existing `meal_feedback` persistence, no
    recommendation-core rewrite, no LLM rerank, and no schema change unless a
    concrete blocker is found.
-5. Keep the two known validation failures classified correctly:
-   the non-LLM high-budget dinner case is a local recommendation/context
-   limitation, and the missing `sleepiness_watch` / `stable_favorites` /
-   `low_repeat` insight case is sparse-data heuristic behavior.
+5. Keep the latest validation baseline current: after the V3 budget-gate pass,
+   `MealAdvisorValidation.exe` is `51/51`. Any future failure should be treated
+   as a new regression unless a later task explicitly changes the expected
+   behavior.
 6. If a real provider key is available in a later window, optionally run one
    live Drawer feedback parse sample, but do not block Stage 7 on provider
    replay unless the strict parser contract regresses.
@@ -1769,11 +1802,10 @@ Use this sequence in the next window if continuing recommendation work:
   validation for mode switching, preview visibility, confirmation actions,
   soft-keyboard behavior, and the dish merchant selector. `日常` is deliberately
   no-op preview scaffolding until temporary routine persistence is added.
-- The current recommendation baseline still does not raise
-  `牛肉火锅单人套餐` into top-3 for the relaxed no-class high-budget dinner
-  validation scenario, because that intent is not explicitly represented in the
-  current non-LLM local context. This is no longer a Stage 6 blocker because
-  the parsed `budgetFlexIntent` path now does raise it.
+- The current recommendation baseline now raises `牛肉火锅单人套餐` into top-3 for
+  the relaxed no-class dinner validation scenario without relying on default
+  budget scoring. Explicit strict-budget input still pushes over-line dinner
+  candidates down through the V3 budget gate.
 - `recommendation_records` now persists selected meal linkage more explicitly,
   and there is now a lightweight inline inspect path on Meals cards, but there
   is still no dedicated full recommendation-history view or candidate-to-
@@ -1786,10 +1818,9 @@ Use this sequence in the next window if continuing recommendation work:
   priority heuristics still need validation against more real usage rather than
   one fixed rule set.
 - The current `feedbackInsights()` output for the seeded 10-log validation data
-  reaches `feedback_coverage`, `recommendation_hits`,
-  `weight_adjustment_suggestions`, and `context_split`, but still does not emit
-  `sleepiness_watch`, `stable_favorites`, or `low_repeat`; current heuristics
-  still favor repeated exact-dish evidence over sparse pattern-level signals.
+  now emits `feedback_coverage`, `recommendation_hits`,
+  `weight_adjustment_suggestions`, `context_split`, `sleepiness_watch`,
+  `stable_favorites`, and `low_repeat` in the desktop validation baseline.
 - The main Meals-page feedback insight / recommendation inspect / feedback
   editor copy is now readable again on the currently scanned path, but older
   non-Meals helper copy and unscanned runtime branches may still need targeted

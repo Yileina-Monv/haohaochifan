@@ -49,6 +49,24 @@ const QStringList kSupplementResultKeys = {
     QStringLiteral("carbIntent"),
     QStringLiteral("drinkIntent"),
     QStringLiteral("budgetFlexIntent"),
+    QStringLiteral("budgetMode"),
+    QStringLiteral("budgetLimitYuan"),
+    QStringLiteral("classConstraintWeight"),
+    QStringLiteral("postMealSleepPlan"),
+    QStringLiteral("plannedNapMinutes"),
+    QStringLiteral("sleepNeedLevel"),
+    QStringLiteral("sleepPlanConfidence"),
+    QStringLiteral("proteinIntent"),
+    QStringLiteral("colaIntent"),
+    QStringLiteral("flavorIntent"),
+    QStringLiteral("relaxedTimePreference")
+};
+
+const QStringList kSupplementLegacyResultKeys = {
+    QStringLiteral("hungerIntent"),
+    QStringLiteral("carbIntent"),
+    QStringLiteral("drinkIntent"),
+    QStringLiteral("budgetFlexIntent"),
     QStringLiteral("classConstraintWeight"),
     QStringLiteral("postMealSleepPlan"),
     QStringLiteral("plannedNapMinutes"),
@@ -129,6 +147,12 @@ const QStringList kSleepPlanValues = {
     QStringLiteral("nap_before_class"),
     QStringLiteral("no_class"),
     QStringLiteral("unknown")
+};
+
+const QStringList kBudgetModeValues = {
+    QStringLiteral("none"),
+    QStringLiteral("strict"),
+    QStringLiteral("relaxed")
 };
 
 const QStringList kDishLevelValues = {
@@ -381,6 +405,8 @@ struct CandidateSignals
     double diversityFit = 0.0;
     double budgetFit = 0.0;
     double intentFit = 0.0;
+    double budgetGatePenalty = 0.0;
+    double budgetGateLimit = 0.0;
     double totalScore = 0.0;
 
     double acquisitionMinutes = 0.0;
@@ -562,6 +588,8 @@ QString supplementParserSystemPrompt()
         "    \"carbIntent\": 1.0,\n"
         "    \"drinkIntent\": 1.0,\n"
         "    \"budgetFlexIntent\": 1.0,\n"
+        "    \"budgetMode\": \"none\",\n"
+        "    \"budgetLimitYuan\": 0,\n"
         "    \"classConstraintWeight\": 1.0,\n"
         "    \"postMealSleepPlan\": \"unknown\",\n"
         "    \"plannedNapMinutes\": 0,\n"
@@ -603,6 +631,16 @@ QString supplementParserSystemPrompt()
         "- postMealSleepPlan\n"
         "Allowed values:\n"
         "\"stay_awake\", \"nap_before_class\", \"no_class\", \"unknown\"\n\n"
+        "Budget fields:\n"
+        "- budgetMode must be one of \"none\", \"strict\", \"relaxed\".\n"
+        "- budgetLimitYuan must be a number from 0 to 999.\n"
+        "- If no budget expression appears, set budgetMode to \"none\" and budgetLimitYuan to 0.\n"
+        "- Explicit amount such as no more than 30 maps to budgetMode \"strict\" and that amount.\n"
+        "- Very low budget / cheapest possible maps to strict + 15.\n"
+        "- Control budget / cheap / not too expensive maps to strict + 40.\n"
+        "- Very high budget / want something better / budget is high maps to relaxed + 100.\n"
+        "- Budget does not matter maps to relaxed + 100.\n"
+        "- High budget does not mean expensive food should be rewarded; it only raises the over-budget line.\n\n"
         "Integer field:\n"
         "- plannedNapMinutes\n"
         "Allowed values:\n"
@@ -617,7 +655,8 @@ QString supplementParserSystemPrompt()
         "- If the user explicitly mentions class soon, rushing to class, or needing a steady meal before class, raise classConstraintWeight above 1.0 instead of leaving it neutral.\n"
         "- If the user explicitly says they need to stay awake or avoid drowsiness, set postMealSleepPlan to stay_awake and usually raise sleepNeedLevel above 1.0 when the wording is strong.\n"
         "- If the user explicitly says they will nap before class and gives a duration, set postMealSleepPlan to nap_before_class, fill plannedNapMinutes, and use high sleepPlanConfidence.\n"
-        "- If the user explicitly says budget can be relaxed, raise budgetFlexIntent above 1.0; if the user explicitly wants cola, raise colaIntent above 1.0.\n\n"
+        "- If the user explicitly says budget can be relaxed, set budgetMode to relaxed and budgetLimitYuan to 100; budgetFlexIntent may stay 1.0 for compatibility.\n"
+        "- If the user explicitly wants cola, raise colaIntent above 1.0.\n\n"
         "Special priority rules:\n\n"
         "1. Explicit scenario change > ordinary preference\n"
         "2. Explicit stay-awake requirement > ordinary carb preference\n"
@@ -1186,8 +1225,8 @@ WeightProfile chooseWeightProfile(const MealContext &context, bool classPressure
         profile.nutritionFit = 20.0;
         profile.preferenceFit = 25.0;
         profile.diversityFit = 20.0;
-        profile.budgetFit = 10.0;
-        profile.intentFit = 5.0;
+        profile.budgetFit = 0.0;
+        profile.intentFit = 15.0;
         return profile;
     }
 
@@ -1198,8 +1237,8 @@ WeightProfile chooseWeightProfile(const MealContext &context, bool classPressure
         profile.nutritionFit = 25.0;
         profile.preferenceFit = 15.0;
         profile.diversityFit = 15.0;
-        profile.budgetFit = 10.0;
-        profile.intentFit = 5.0;
+        profile.budgetFit = 0.0;
+        profile.intentFit = 15.0;
         return profile;
     }
 
@@ -1209,8 +1248,8 @@ WeightProfile chooseWeightProfile(const MealContext &context, bool classPressure
     profile.nutritionFit = 25.0;
     profile.preferenceFit = 20.0;
     profile.diversityFit = 15.0;
-    profile.budgetFit = 10.0;
-    profile.intentFit = 5.0;
+    profile.budgetFit = 0.0;
+    profile.intentFit = 15.0;
     return profile;
 }
 
@@ -1290,15 +1329,15 @@ WeightMap buildResolvedWeights(const MealContext &context,
                    readOverride(overrides, QStringLiteral("budget.acquire_cost_fit"), 0.35));
 
     weights.insert(QStringLiteral("intent.hunger_intent"),
-                   readOverride(overrides, QStringLiteral("intent.hunger_intent"), 0.30));
+                   readOverride(overrides, QStringLiteral("intent.hunger_intent"), 0.34));
     weights.insert(QStringLiteral("intent.carb_intent"),
-                   readOverride(overrides, QStringLiteral("intent.carb_intent"), 0.22));
+                   readOverride(overrides, QStringLiteral("intent.carb_intent"), 0.25));
     weights.insert(QStringLiteral("intent.drink_intent"),
-                   readOverride(overrides, QStringLiteral("intent.drink_intent"), 0.18));
+                   readOverride(overrides, QStringLiteral("intent.drink_intent"), 0.19));
     weights.insert(QStringLiteral("intent.budget_flex_intent"),
-                   readOverride(overrides, QStringLiteral("intent.budget_flex_intent"), 0.12));
+                   readOverride(overrides, QStringLiteral("intent.budget_flex_intent"), 0.0));
     weights.insert(QStringLiteral("intent.skip_class_constraint"),
-                   readOverride(overrides, QStringLiteral("intent.skip_class_constraint"), 0.18));
+                   readOverride(overrides, QStringLiteral("intent.skip_class_constraint"), 0.22));
 
     weights.insert(QStringLiteral("config.recent_non_breakfast_meal_window"),
                    readOverride(overrides,
@@ -1429,6 +1468,12 @@ double weightedScore(const QList<QPair<double, double>> &values)
     return (totalScore / totalWeight) * 100.0;
 }
 
+bool budgetGateActive(const RecommendationEngine::SupplementAdjustment &adjustment)
+{
+    return adjustment.budgetMode != QStringLiteral("none") &&
+           adjustment.budgetLimitYuan > 0.0;
+}
+
 void appendUnique(QStringList *list, const QString &text)
 {
     if (list != nullptr && !text.isEmpty() && !list->contains(text)) {
@@ -1451,8 +1496,11 @@ QVariantList buildBreakdownList(const CandidateSignals &metrics)
     appendItem(QStringLiteral("营养平衡"), metrics.nutritionFit);
     appendItem(QStringLiteral("个人偏好"), metrics.preferenceFit);
     appendItem(QStringLiteral("多餐补偿"), metrics.diversityFit);
-    appendItem(QStringLiteral("预算适配"), metrics.budgetFit);
     appendItem(QStringLiteral("当前需求"), metrics.intentFit);
+
+    if (metrics.budgetGateLimit > 0.0) {
+        appendItem(QStringLiteral("预算门槛"), metrics.budgetGatePenalty);
+    }
     appendItem(QStringLiteral("综合得分"), metrics.totalScore);
 
     return breakdown;
@@ -1977,8 +2025,8 @@ QStringList buildWarnings(const Dish &dish,
         appendUnique(&warnings, QStringLiteral("这一项在当前时段的时间可行性一般。"));
     }
 
-    if (dish.price > flexibleMealBudget) {
-        appendUnique(&warnings, QStringLiteral("价格已经超过本餐弹性预算。"));
+    if (budgetGateActive(adjustment) && dish.price > flexibleMealBudget) {
+        appendUnique(&warnings, QStringLiteral("已超过本次预算线，排序中已大幅降权。"));
     }
 
     if (sleepModifier.totalTimePenaltyMultiplier >= 1.5 &&
@@ -2018,6 +2066,12 @@ QVariantList buildWeightList(
     if (!isNeutralValue(adjustment.budgetFlexIntent, 1.0)) {
         appendNormalizedWeight(QStringLiteral("预算放宽"),
                                QString::number(adjustment.budgetFlexIntent, 'f', 2));
+    }
+    if (budgetGateActive(adjustment)) {
+        appendNormalizedWeight(QStringLiteral("预算门槛"),
+                               QStringLiteral("%1 %2 元")
+                                   .arg(adjustment.budgetMode,
+                                        QString::number(adjustment.budgetLimitYuan, 'f', 0)));
     }
     if (!isNeutralValue(adjustment.classConstraintWeight, 1.0)) {
         appendNormalizedWeight(QStringLiteral("课程约束"),
@@ -2303,7 +2357,6 @@ void RecommendationEngine::runDecision()
         strongIntentDelta(m_adjustment.relaxedTimePreference);
     const double hungerIntentDelta = weakIntentDelta(m_adjustment.hungerIntent);
     const double carbIntentDelta = weakIntentDelta(m_adjustment.carbIntent);
-    const double budgetFlexDelta = weakIntentDelta(m_adjustment.budgetFlexIntent);
     const double drinkIntentDelta = weakIntentDelta(m_adjustment.drinkIntent);
     const double proteinIntentDelta = weakIntentDelta(m_adjustment.proteinIntent);
     const double colaIntentDelta = weakIntentDelta(m_adjustment.colaIntent);
@@ -2370,41 +2423,10 @@ void RecommendationEngine::runDecision()
         recentMealAggregates.append(aggregateMeal(snapshot, allDishById));
     }
 
-    const double baseDailyBudget =
-        context.policy.defaultDailyBudget > 0.0 ? context.policy.defaultDailyBudget : 80.0;
-    const double baseFlexibleBudget =
-        context.policy.flexibleBudgetCap > 0.0 ? context.policy.flexibleBudgetCap : 120.0;
-    const double budgetScale = 1.0 + clampRange(budgetFlexDelta, -0.25, 0.35) * 0.25;
-    const double parsedBudgetRelaxBlend =
-        m_adjustment.hasParsed && budgetFlexDelta > 0.0
-            ? clamp01(budgetFlexDelta / 0.35)
-            : 0.0;
-    const double localRelaxedDinnerBudgetBlend =
-        !m_adjustment.hasParsed &&
-                !classPressure &&
-                context.mealType == QStringLiteral("dinner")
-            ? 0.45
-            : 0.0;
-    const double budgetRelaxBlend =
-        std::max(parsedBudgetRelaxBlend, localRelaxedDinnerBudgetBlend);
-    const bool relaxedBudgetDinnerScene =
-        budgetRelaxBlend > 0.0 &&
-        !classPressure &&
-        context.mealType == QStringLiteral("dinner");
-    const double mealBudget =
-        (context.mealType == QStringLiteral("breakfast") ? baseDailyBudget * 0.20
-                                                         : baseDailyBudget * 0.40) *
-        budgetScale;
-    double flexibleMealBudget =
-        (context.mealType == QStringLiteral("breakfast") ? baseFlexibleBudget * 0.24
-                                                         : baseFlexibleBudget * 0.45) *
-        std::max(0.85, budgetScale);
-    if (relaxedBudgetDinnerScene) {
-        const double relaxedDinnerCapShare =
-            std::min(1.0, 0.45 + budgetRelaxBlend * 0.70);
-        flexibleMealBudget =
-            std::max(flexibleMealBudget, baseFlexibleBudget * relaxedDinnerCapShare);
-    }
+    const bool hasBudgetGate = budgetGateActive(m_adjustment);
+    const double budgetGateLimit = hasBudgetGate ? m_adjustment.budgetLimitYuan : 0.0;
+    const double mealBudget = budgetGateLimit;
+    const double flexibleMealBudget = budgetGateLimit;
 
     QList<CandidateResult> rankedCandidates;
     rankedCandidates.reserve(dishes.size());
@@ -2502,6 +2524,12 @@ void RecommendationEngine::runDecision()
             clamp01(1.0 - std::max(0.0, metrics.totalOccupiedMinutes - availableMinutes) /
                              std::max(40.0, availableMinutes)) *
             100.0;
+        if (context.hasClassAfterMeal && context.mealType == QStringLiteral("lunch")) {
+            const double classDayLongMealFit =
+                clamp01(1.0 - std::max(0.0, metrics.acquisitionMinutes - 60.0) / 45.0) *
+                100.0;
+            metrics.timeFit = std::min(metrics.timeFit, classDayLongMealFit);
+        }
 
         const double diningModeBase =
             dish.defaultDiningMode == QStringLiteral("takeaway")
@@ -2533,11 +2561,19 @@ void RecommendationEngine::runDecision()
             (context.hasClassAfterMeal ? classComposite : clamp01(classComposite * 0.6 + 0.4)) *
             100.0;
 
+        const double sceneAcquireTarget =
+            classPressure ? 38.0 : (context.mealType == QStringLiteral("dinner") ? 58.0 : 48.0);
+        metrics.acquireCostFit =
+            clamp01(1.0 - std::max(0.0, metrics.acquisitionMinutes - sceneAcquireTarget) /
+                             std::max(20.0, sceneAcquireTarget)) *
+            100.0;
+
         metrics.sceneFit = weightedScore(
-            {{metrics.timeFit / 100.0, weights.value(QStringLiteral("scene.time_fit"))},
-             {metrics.classFit / 100.0, weights.value(QStringLiteral("scene.class_fit"))},
+            {{metrics.timeFit / 100.0, weights.value(QStringLiteral("scene.time_fit")) * 0.92},
+             {metrics.classFit / 100.0, weights.value(QStringLiteral("scene.class_fit")) * 0.92},
              {metrics.diningModeFit / 100.0, weights.value(QStringLiteral("scene.dining_mode_fit"))},
-             {metrics.mealTypeFit / 100.0, weights.value(QStringLiteral("scene.meal_type_fit"))}});
+             {metrics.mealTypeFit / 100.0, weights.value(QStringLiteral("scene.meal_type_fit"))},
+             {metrics.acquireCostFit / 100.0, 0.08}});
 
         const double sleepinessMetricWeight =
             weights.value(QStringLiteral("nutrition.sleepiness_risk_fit")) *
@@ -2724,7 +2760,6 @@ void RecommendationEngine::runDecision()
             {{metrics.hungerIntentFit / 100.0, weights.value(QStringLiteral("intent.hunger_intent"))},
              {metrics.carbIntentFit / 100.0, weights.value(QStringLiteral("intent.carb_intent"))},
              {metrics.drinkIntentFit / 100.0, weights.value(QStringLiteral("intent.drink_intent"))},
-             {metrics.budgetFlexIntentFit / 100.0, weights.value(QStringLiteral("intent.budget_flex_intent"))},
              {metrics.skipClassConstraintFit / 100.0, weights.value(QStringLiteral("intent.skip_class_constraint"))}});
 
         metrics.totalScore =
@@ -2732,7 +2767,6 @@ void RecommendationEngine::runDecision()
             metrics.nutritionFit * weights.value(QStringLiteral("group.nutrition_fit")) / 100.0 +
             metrics.preferenceFit * weights.value(QStringLiteral("group.preference_fit")) / 100.0 +
             metrics.diversityFit * weights.value(QStringLiteral("group.diversity_fit")) / 100.0 +
-            metrics.budgetFit * weights.value(QStringLiteral("group.budget_fit")) / 100.0 +
             metrics.intentFit * weights.value(QStringLiteral("group.intent_fit")) / 100.0;
 
         metrics.totalScore += mealImpactFit * 4.5;
@@ -2740,14 +2774,6 @@ void RecommendationEngine::runDecision()
                               (2.0 + std::max(0.0, flavorIntentDelta) * 8.0);
         metrics.totalScore += positiveLevelScore(dish.proteinLevel) *
                               (1.5 + std::max(0.0, proteinIntentDelta) * 7.0);
-        if (relaxedBudgetDinnerScene &&
-            dish.price > mealBudget &&
-            dish.price <= flexibleMealBudget) {
-            const double relaxedSpendMatch =
-                clamp01((dish.price - mealBudget) /
-                        std::max(1.0, flexibleMealBudget - mealBudget));
-            metrics.totalScore += budgetRelaxBlend * relaxedSpendMatch * 24.0;
-        }
         if (colaDish && colaIntentDelta > 0.0) {
             metrics.totalScore += colaIntentDelta * 18.0;
         }
@@ -2756,6 +2782,13 @@ void RecommendationEngine::runDecision()
         }
         if (snackLike && beverageIntentDelta < 0.0) {
             metrics.totalScore -= 5.0;
+        }
+        if (hasBudgetGate) {
+            metrics.budgetGateLimit = budgetGateLimit;
+            if (dish.price > budgetGateLimit) {
+                metrics.budgetGatePenalty = -40.0;
+                metrics.totalScore += metrics.budgetGatePenalty;
+            }
         }
 
         CandidateResult candidate;
@@ -3437,7 +3470,12 @@ RecommendationEngine::evaluateSupplementResponse(const QString &sourceText,
 
     const QJsonObject resultObject =
         contractObject.value(QStringLiteral("result")).toObject();
-    if (!validateExactKeys(resultObject, kSupplementResultKeys,
+    const bool hasV3BudgetFields =
+        resultObject.contains(QStringLiteral("budgetMode")) ||
+        resultObject.contains(QStringLiteral("budgetLimitYuan"));
+    const QStringList expectedSupplementKeys =
+        hasV3BudgetFields ? kSupplementResultKeys : kSupplementLegacyResultKeys;
+    if (!validateExactKeys(resultObject, expectedSupplementKeys,
                            &validationError)) {
         outcome.state = QStringLiteral("invalid_response");
         outcome.status = QStringLiteral("返回 JSON result 字段非法：%1。已回退到默认参数。")
@@ -3497,6 +3535,42 @@ RecommendationEngine::evaluateSupplementResponse(const QString &sourceText,
         outcome.state = QStringLiteral("invalid_response");
         outcome.status = QStringLiteral("返回 JSON 值非法：%1。已回退到默认参数。")
                              .arg(validationError);
+        outcome.fallbackUsed = true;
+        outcome.adjustment.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (hasV3BudgetFields) {
+        if (!readAllowedString(resultObject, QStringLiteral("budgetMode"),
+                               kBudgetModeValues,
+                               &parsedAdjustment.budgetMode,
+                               &validationError) ||
+            !readRequiredDoubleRange(resultObject,
+                                     QStringLiteral("budgetLimitYuan"),
+                                     0.0, 999.0,
+                                     &parsedAdjustment.budgetLimitYuan,
+                                     &validationError)) {
+            outcome.state = QStringLiteral("invalid_response");
+            outcome.status = QStringLiteral("预算字段非法：%1。已回退到默认补充参数。")
+                                 .arg(validationError);
+            outcome.fallbackUsed = true;
+            outcome.adjustment.fallbackUsed = true;
+            return outcome;
+        }
+    } else if (parsedAdjustment.budgetFlexIntent > 1.0) {
+        parsedAdjustment.budgetMode = QStringLiteral("relaxed");
+        parsedAdjustment.budgetLimitYuan = 100.0;
+    } else if (parsedAdjustment.budgetFlexIntent < 1.0) {
+        parsedAdjustment.budgetMode = QStringLiteral("strict");
+        parsedAdjustment.budgetLimitYuan = 40.0;
+    }
+
+    if ((parsedAdjustment.budgetMode == QStringLiteral("none") &&
+         parsedAdjustment.budgetLimitYuan != 0.0) ||
+        (parsedAdjustment.budgetMode != QStringLiteral("none") &&
+         parsedAdjustment.budgetLimitYuan <= 0.0)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("预算模式和预算线不一致，已回退到默认补充参数。");
         outcome.fallbackUsed = true;
         outcome.adjustment.fallbackUsed = true;
         return outcome;
