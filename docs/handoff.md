@@ -37,6 +37,11 @@ The project has moved beyond a static scaffold and now includes:
 - the LLM layer now has four OpenAI-compatible request paths:
   connection testing, recommendation supplement parsing, feedback parsing, and
   single-dish natural-language form filling
+- the three RecommendationEngine parser system prompts now include explicit
+  food/scenario guardrails: supplement parsing separates refined-carb avoidance
+  from protein/beef preference, feedback parsing records actual user experience
+  rather than inferred macro effects, and dish parsing treats static dish
+  attributes separately from runtime class/nap/study context
 - the next planned LLM direction is a main-page natural-language task layer
   with a compact mode switch for recommendation explanation, previous-meal
   feedback, dish import, and temporary routine import; the long-term plan is in
@@ -468,6 +473,10 @@ next step from scratch.
   builds more than the earlier desktop-only verification path
 - The parser request path now uses docs-backed `system` + `user` prompts,
   OpenAI Chat Completions style payloads, and `temperature = 0`
+- Current parser prompt guardrails distinguish refined white staples / sugary
+  drinks from high-fiber carbs, and avoid treating high-protein low-carb meals
+  such as beef hotpot as high-carb/"carb coma" dishes unless carb add-ons,
+  very large portions, or explicit user feedback support that label.
 - The parser response path now enforces:
   - strict JSON only
   - `version = supplement_parser_v1`

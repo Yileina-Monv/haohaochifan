@@ -1,6 +1,6 @@
 ﻿# Project Memory
 
-Last updated: `2026-04-26`
+Last updated: `2026-04-27`
 
 ## Update Rule
 
@@ -47,6 +47,12 @@ If the current task changes project direction or major behavior, also update
 - The LLM layer currently supports four OpenAI-compatible request paths:
   connection test, recommendation supplement parsing, feedback parsing, and
   single-dish natural-language form filling.
+- The three RecommendationEngine parser system prompts now include food/scenario
+  guardrails so the LLM separates static dish attributes, actual post-meal
+  feedback, and runtime recommendation intent. In particular, refined staple
+  carbs / sugary drinks are treated differently from high-fiber carbs, and
+  high-protein low-carb foods such as beef hotpot are not treated as
+  high-carb/"carb coma" foods solely because they are filling.
 - The next LLM product direction is documented in
   `docs/llm-natural-language-business-plan.md`: keep the main page simple, add
   a mode switch, and route recommendation explanation, previous-meal feedback,
@@ -507,6 +513,22 @@ Completion signal:
 - Updated `docs/llm-supplement-prompt.md`,
   `docs/recommendation-metrics-table.md`, and `docs/v3-plan.md` to reflect
   the implemented budget-gate behavior.
+- Tightened the three LLM parser system prompts in
+  `src/recommendation/recommendationengine.cpp` after a food-sleepiness
+  prompt review:
+  - supplement parsing now distinguishes refined/staple carb avoidance from
+    protein/beef preference and avoids inventing stay-awake pressure from dish
+    names alone
+  - feedback parsing now records the user's actual post-meal experience instead
+    of inferring sleepiness from macros or dish names
+  - dish input parsing now treats dish fields as static attributes, separates
+    `sleepinessRiskLevel` from `carbLevel`, handles beef hotpot as high
+    protein / low carb unless carb add-ons are present, and distinguishes
+    refined carbs from high-fiber carbs
+  - `docs/llm-supplement-prompt.md` was updated with the matching supplement
+    guardrails
+  - desktop build passed, `MealAdvisorValidation.exe` passed `51/51`, and a
+    5-second desktop smoke launch had empty stderr
 
 ### `2026-04-18`
 

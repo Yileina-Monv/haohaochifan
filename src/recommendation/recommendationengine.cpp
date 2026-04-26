@@ -657,6 +657,14 @@ QString supplementParserSystemPrompt()
         "- If the user explicitly says they will nap before class and gives a duration, set postMealSleepPlan to nap_before_class, fill plannedNapMinutes, and use high sleepPlanConfidence.\n"
         "- If the user explicitly says budget can be relaxed, set budgetMode to relaxed and budgetLimitYuan to 100; budgetFlexIntent may stay 1.0 for compatibility.\n"
         "- If the user explicitly wants cola, raise colaIntent above 1.0.\n\n"
+        "Food and scenario guardrails:\n"
+        "- Carb intent is about staple and sugar load: rice, noodles, bread, buns, dumplings, potatoes, desserts, sweet drinks, and similar foods.\n"
+        "- Whole grains, beans, oats, corn, sweet potato, and other high-fiber carbs are still carbohydrates, but they are not the same signal as refined white staple food or sugary drinks.\n"
+        "- Do not treat protein-rich low-carb food as high-carb or \"carb coma\" food. Beef, eggs, tofu, plain meat, grilled meat, and low-carb hotpot mainly indicate protein, satiety, fat, time cost, or digestive burden.\n"
+        "- If the user says they want beef/protein while avoiding drowsiness, usually raise proteinIntent and lower carbIntent; do not punish the protein request as if it were a carb request.\n"
+        "- If the user wants low carb, prefer lowering carbIntent instead of changing sleepNeedLevel unless they also explicitly mention staying awake, class, studying, driving, or no nap.\n"
+        "- Do not infer class pressure, nap plans, or stay-awake pressure from a dish name alone. Use explicit user wording plus the runtime context.\n"
+        "- Dinner or no-class situations should not become a stay_awake scenario unless the user explicitly says they must remain alert after eating.\n\n"
         "Special priority rules:\n\n"
         "1. Explicit scenario change > ordinary preference\n"
         "2. Explicit stay-awake requirement > ordinary carb preference\n"
@@ -747,6 +755,15 @@ QString feedbackParserSystemPrompt()
         "- focusImpactLevel: 1 means focus was hurt, 5 means focus stayed good.\n"
         "- tasteRating: 1 means bad taste, 5 means excellent taste.\n"
         "- repeatWillingness: 1 means do not want again, 5 means strongly want again.\n\n"
+        "Context and attribution rules:\n"
+        "- Parse the user's actual post-meal experience. Do not infer sleepiness from the dish name or macronutrients when the user did not report feeling sleepy.\n"
+        "- sleepinessLevel covers drowsiness, food-coma feeling, \"carb crash\", wanting to nap, or reduced alertness after the meal, usually within 30 minutes to 4 hours.\n"
+        "- If the user says they were not sleepy or stayed clear-headed, set sleepinessLevel low and focusImpactLevel high even if the meal included rice, noodles, hotpot, or meat.\n"
+        "- If the user says they became sleepy, score the actual sleepiness even when the meal was high-protein or low-carb; do not force the cause to be carbohydrates.\n"
+        "- Separate fullness, digestive comfort, sleepiness, and focus. Being full or bloated is not automatically sleepiness; being sleepy is not automatically bad taste.\n"
+        "- Class, study, exam, driving, or work after the meal mainly affects focusImpactLevel: sleepy or sluggish in those scenarios means lower focusImpactLevel.\n"
+        "- If the user mentions poor sleep, afternoon slump, late night, illness, or other external context, keep the actual score but mention that uncertainty briefly in freeTextFeedback.\n"
+        "- Do not convert feedback into future advice, dish tags, or recommendations.\n\n"
         "If the input is vague, stay conservative around 3 rather than inventing strong scores.");
 }
 
@@ -821,7 +838,18 @@ QString dishParserSystemPrompt()
         "- Use high only when common knowledge or explicit input strongly supports it.\n"
         "- For drinks, snacks, or small add-ons, set isBeverage true when appropriate and mealImpactWeight below 1.0.\n"
         "- For套餐, combo, set isCombo true.\n"
-        "- If the user gives a price or time, use it exactly when it fits the allowed range.");
+        "- If the user gives a price or time, use it exactly when it fits the allowed range.\n\n"
+        "Food science and scenario guardrails:\n"
+        "- These dish fields are static attributes. Do not encode the current class schedule, time of day, nap plan, or study pressure into carbLevel, digestiveBurdenLevel, or sleepinessRiskLevel.\n"
+        "- sleepinessRiskLevel means ordinary post-meal drowsiness potential from meal size, refined-carb/sugar load, fat/heaviness, low fiber, and likely digestive burden. It is not the same as carbLevel.\n"
+        "- Refined or fast carbs such as white rice, white noodles, white bread, buns, pastries, desserts, sweet drinks, and large starchy portions usually raise carbLevel and may raise sleepinessRiskLevel when portion is meal-sized.\n"
+        "- Whole grains, oats, beans, corn, sweet potato, and other high-fiber starches are still carbs, but they usually imply higher fiberLevel and a lower sleepinessRiskLevel than refined white staples at the same portion size.\n"
+        "- High-protein low-carb dishes such as beef, eggs, tofu, plain meat, grilled meat, or low-carb hotpot should not be marked high carb or high sleepiness solely because they are filling.\n"
+        "- For beef hotpot or similar hotpot without rice, noodles, sweet drink, or dessert: usually carbLevel low, proteinLevel high, satietyLevel high, eatTimeMinutes high, acquireEffortScore medium or high, fatLevel/digestiveBurdenLevel medium to high depending on oiliness; sleepinessRiskLevel is usually medium unless the portion is very large or very fatty.\n"
+        "- If a hotpot/set meal includes rice, noodles, potatoes, fried snacks, dessert, or sweet drink, reflect those additions in carbLevel, sleepinessRiskLevel, isCombo, and notes.\n"
+        "- Large solid meals and very heavy/oily meals can raise digestiveBurdenLevel and sleepinessRiskLevel even without high carbs, but use high only with strong evidence such as large portion, very oily, buffet, hotpot set, or explicit user wording.\n"
+        "- Liquid drinks, fruit tea, milk tea, soda, and small snacks should normally have lower mealImpactWeight; sugary drinks can be high carb but should not be treated like a full meal unless portion or context says so.\n"
+        "- When uncertain, use medium and explain the assumption in notes instead of making extreme low/high labels.");
 }
 
 QString dishParserUserPrompt(const QString &merchantName, const QString &userText)

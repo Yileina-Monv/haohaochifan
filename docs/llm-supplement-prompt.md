@@ -122,6 +122,27 @@ Interpretation rules:
 - If the user explicitly says budget can be relaxed, set `budgetMode = "relaxed"` and `budgetLimitYuan = 100`; `budgetFlexIntent` may stay `1.0` for compatibility.
 - If the user explicitly wants cola, raise `colaIntent` above `1.0`.
 
+Food and scenario guardrails:
+
+- Carb intent is about staple and sugar load: rice, noodles, bread, buns,
+  dumplings, potatoes, desserts, sweet drinks, and similar foods.
+- Whole grains, beans, oats, corn, sweet potato, and other high-fiber carbs are
+  still carbohydrates, but they are not the same signal as refined white staple
+  food or sugary drinks.
+- Do not treat protein-rich low-carb food as high-carb or "carb coma" food.
+  Beef, eggs, tofu, plain meat, grilled meat, and low-carb hotpot mainly
+  indicate protein, satiety, fat, time cost, or digestive burden.
+- If the user says they want beef/protein while avoiding drowsiness, usually
+  raise `proteinIntent` and lower `carbIntent`; do not punish the protein
+  request as if it were a carb request.
+- If the user wants low carb, prefer lowering `carbIntent` instead of changing
+  `sleepNeedLevel` unless they also explicitly mention staying awake, class,
+  studying, driving, or no nap.
+- Do not infer class pressure, nap plans, or stay-awake pressure from a dish name
+  alone. Use explicit user wording plus the runtime context.
+- Dinner or no-class situations should not become a `stay_awake` scenario unless
+  the user explicitly says they must remain alert after eating.
+
 Special priority rules:
 
 1. Explicit scenario change > ordinary preference

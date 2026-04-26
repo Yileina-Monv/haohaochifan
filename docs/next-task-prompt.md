@@ -8,11 +8,11 @@ The project path is D:\Codex\2026-04-18-qt-c-app.
 Before editing, read these files in order:
 1. docs/memory.md
 2. docs/next-task-prompt.md
-3. docs/v3-plan.md
-4. docs/llm-supplement-prompt.md
-5. docs/recommendation-metrics-table.md
-6. docs/product-rules.md
-7. docs/handoff.md
+3. docs/handoff.md
+4. docs/v3-plan.md
+5. docs/llm-supplement-prompt.md
+6. docs/recommendation-metrics-table.md
+7. docs/product-rules.md
 8. src/recommendation/recommendationengine.h
 9. src/recommendation/recommendationengine.cpp
 10. tools/validation/main.cpp
@@ -20,37 +20,52 @@ Before editing, read these files in order:
 Current status:
 - The app is Qt Quick/QML + C++ + SQLite.
 - Local rule-based recommendation remains the final authority.
-- Initial V3 budget-gate recommendation logic has been implemented inside the
+- Initial V3 budget-gate recommendation logic is implemented inside the
   existing RecommendationEngine.
 - Budget is no longer a default weighted scoring group.
-- The supplement parser now accepts budgetMode and budgetLimitYuan while still
-  accepting the older 13-field response for compatibility.
+- The supplement parser accepts budgetMode and budgetLimitYuan while still
+  accepting older 13-field responses for compatibility.
 - Explicit strict/relaxed budget modes apply a fixed -40 over-budget gate
   penalty and keep over-line candidates as fallbacks.
-- Acquisition / long-meal cost is handled through scene fit so class-day lunch
-  still avoids slow heavy options without relying on price.
-- Latest verification:
-  1. Desktop build passed:
-     cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation
-  2. MealAdvisorValidation.exe passed 51/51.
-  3. 5-second desktop smoke launch had empty stderr.
+- The three parser system prompts in RecommendationEngine now include food and
+  scenario guardrails:
+  - supplement parsing distinguishes refined/staple carb avoidance from
+    protein/beef preference and avoids inventing stay-awake pressure from dish
+    names alone
+  - feedback parsing records the user's actual post-meal experience instead of
+    inferring sleepiness from macros or dish names
+  - dish input parsing treats dish fields as static attributes, separates
+    sleepinessRiskLevel from carbLevel, handles beef hotpot as high-protein /
+    low-carb unless carb add-ons are present, and distinguishes refined carbs
+    from high-fiber carbs
+- docs/llm-supplement-prompt.md has the matching supplement guardrails.
+
+Latest verification:
+1. Desktop build passed:
+   cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation
+2. MealAdvisorValidation.exe passed 51/51.
+3. 5-second desktop smoke launch had empty stderr.
 
 Recommended next goal:
-- Do not rewrite the recommendation engine again unless a concrete regression is
+- Do not rewrite the recommendation engine unless a concrete regression is
   found.
 - The highest-value next step is Android/runtime validation when a device or AVD
   is available:
   - main recommendation send flow
   - V3 budget wording through the supplement parser
   - strict budget vs relaxed budget examples
+  - dish input examples such as "牛肉火锅单人套餐，不加饭不加面" and
+    "全麦/粗粮主食"
+  - feedback examples such as "吃完不困但很撑" and "没睡好所以饭后犯困"
   - warning/breakdown display for over-budget candidates
   - Drawer LLM connection test
   - placeholder/keyboard behavior and horizontal-scroll regression checks
 
 Optional focused follow-up before Android:
-- Add a small UI polish pass only if the budget-gate warning/breakdown copy is
-  hard to read in the existing recommendation cards.
-- Keep it QML-only unless runtime evidence points to C++ behavior.
+- Add local parser prompt request-shape assertions only if future prompt edits
+  become risky; current validation already proves the request path and strict
+  JSON contracts still work.
+- Keep any UI polish QML-only unless runtime evidence points to C++ behavior.
 
 Validation commands:
 1. Desktop build:
