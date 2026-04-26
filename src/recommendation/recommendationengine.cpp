@@ -2375,10 +2375,18 @@ void RecommendationEngine::runDecision()
     const double baseFlexibleBudget =
         context.policy.flexibleBudgetCap > 0.0 ? context.policy.flexibleBudgetCap : 120.0;
     const double budgetScale = 1.0 + clampRange(budgetFlexDelta, -0.25, 0.35) * 0.25;
-    const double budgetRelaxBlend =
+    const double parsedBudgetRelaxBlend =
         m_adjustment.hasParsed && budgetFlexDelta > 0.0
             ? clamp01(budgetFlexDelta / 0.35)
             : 0.0;
+    const double localRelaxedDinnerBudgetBlend =
+        !m_adjustment.hasParsed &&
+                !classPressure &&
+                context.mealType == QStringLiteral("dinner")
+            ? 0.45
+            : 0.0;
+    const double budgetRelaxBlend =
+        std::max(parsedBudgetRelaxBlend, localRelaxedDinnerBudgetBlend);
     const bool relaxedBudgetDinnerScene =
         budgetRelaxBlend > 0.0 &&
         !classPressure &&

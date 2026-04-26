@@ -3091,9 +3091,39 @@ void MealLogManager::refreshState()
     QList<RankedDishSignal> favoriteSignals;
     QList<RankedDishSignal> sleepySignals;
     QList<RankedDishSignal> lowRepeatSignals;
+    QList<RankedDishSignal> observedFavoriteSignals;
+    QList<RankedDishSignal> observedSleepySignals;
+    QList<RankedDishSignal> observedLowRepeatSignals;
     QList<RankedDishSignal> improvingSignals;
     QList<RankedDishSignal> worseningSignals;
     for (const DishFeedbackAggregate &aggregate : feedbackAggregates) {
+        const bool hasObservedEvidence =
+            aggregate.sampleCount > 0 && aggregate.effectiveSampleWeight >= 0.65;
+        if (hasObservedEvidence) {
+            if (aggregate.avgTasteRating >= 4.0 &&
+                aggregate.avgRepeatWillingness >= 3.8) {
+                observedFavoriteSignals.append({aggregate.dishId,
+                                                aggregate.avgTasteRating,
+                                                aggregate.avgRepeatWillingness,
+                                                aggregate.sampleCount});
+            }
+
+            if (aggregate.avgSleepinessLevel >= 3.8) {
+                observedSleepySignals.append({aggregate.dishId,
+                                              aggregate.avgSleepinessLevel,
+                                              aggregate.avgComfortLevel,
+                                              aggregate.sampleCount});
+            }
+
+            if (aggregate.avgRepeatWillingness > 0.0 &&
+                aggregate.avgRepeatWillingness <= 2.8) {
+                observedLowRepeatSignals.append({aggregate.dishId,
+                                                 aggregate.avgRepeatWillingness,
+                                                 aggregate.avgTasteRating,
+                                                 aggregate.sampleCount});
+            }
+        }
+
         if (aggregate.effectiveSampleWeight < 1.6 || aggregate.sampleCount < 2) {
             continue;
         }
@@ -3157,11 +3187,24 @@ void MealLogManager::refreshState()
                   return (left.primaryValue + left.secondaryValue) >
                          (right.primaryValue + right.secondaryValue);
               });
+    std::sort(observedFavoriteSignals.begin(), observedFavoriteSignals.end(),
+              [](const RankedDishSignal &left, const RankedDishSignal &right) {
+                  return (left.primaryValue + left.secondaryValue) >
+                         (right.primaryValue + right.secondaryValue);
+              });
     std::sort(sleepySignals.begin(), sleepySignals.end(),
               [](const RankedDishSignal &left, const RankedDishSignal &right) {
                   return left.primaryValue > right.primaryValue;
               });
+    std::sort(observedSleepySignals.begin(), observedSleepySignals.end(),
+              [](const RankedDishSignal &left, const RankedDishSignal &right) {
+                  return left.primaryValue > right.primaryValue;
+              });
     std::sort(lowRepeatSignals.begin(), lowRepeatSignals.end(),
+              [](const RankedDishSignal &left, const RankedDishSignal &right) {
+                  return left.primaryValue < right.primaryValue;
+              });
+    std::sort(observedLowRepeatSignals.begin(), observedLowRepeatSignals.end(),
               [](const RankedDishSignal &left, const RankedDishSignal &right) {
                   return left.primaryValue < right.primaryValue;
               });
@@ -3173,6 +3216,16 @@ void MealLogManager::refreshState()
               [](const RankedDishSignal &left, const RankedDishSignal &right) {
                   return left.primaryValue > right.primaryValue;
               });
+
+    if (favoriteSignals.isEmpty() && observedFavoriteSignals.size() >= 2) {
+        favoriteSignals = observedFavoriteSignals;
+    }
+    if (sleepySignals.isEmpty() && observedSleepySignals.size() >= 2) {
+        sleepySignals = observedSleepySignals;
+    }
+    if (lowRepeatSignals.isEmpty() && observedLowRepeatSignals.size() >= 2) {
+        lowRepeatSignals = observedLowRepeatSignals;
+    }
 
     if (!favoriteSignals.isEmpty()) {
         favoriteSignals = favoriteSignals.mid(0, 3);
