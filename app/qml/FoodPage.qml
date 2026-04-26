@@ -51,8 +51,71 @@ ScrollView {
         }
     }
 
+    component LabeledTextField: ColumnLayout {
+        id: labeledTextField
+        property string label: ""
+        property string hintText: ""
+        property alias text: field.text
+        property alias inputMethodHints: field.inputMethodHints
+
+        Layout.fillWidth: true
+        spacing: 5
+
+        Label {
+            Layout.fillWidth: true
+            text: labeledTextField.label
+            color: "#4d5333"
+            font.pixelSize: 13
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        TextField {
+            id: field
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+            placeholderText: activeFocus || text.length > 0 ? "" : labeledTextField.hintText
+        }
+    }
+
+    component LabeledComboBox: ColumnLayout {
+        id: labeledComboBox
+        property string label: ""
+        property alias currentIndex: box.currentIndex
+        property alias currentValue: box.currentValue
+        property alias currentText: box.currentText
+        property alias count: box.count
+        property alias model: box.model
+        property alias textRole: box.textRole
+        property alias valueRole: box.valueRole
+
+        function valueAt(index) {
+            return box.valueAt(index)
+        }
+
+        Layout.fillWidth: true
+        spacing: 5
+
+        Label {
+            Layout.fillWidth: true
+            text: labeledComboBox.label
+            color: "#4d5333"
+            font.pixelSize: 13
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        ComboBox {
+            id: box
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+        }
+    }
+
     id: root
     clip: true
+    contentWidth: availableWidth
+    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
     readonly property bool narrowLayout: root.availableWidth < 380
     property int editingMerchantId: 0
@@ -201,6 +264,34 @@ ScrollView {
         dishMerchantBox.currentIndex = merchantIndexForId(dish.merchantId)
     }
 
+    function applyParsedDish(dish) {
+        if (!dish || recommendationEngine.dishParseState !== "success") {
+            return
+        }
+
+        editingDishId = 0
+        dishNameField.text = dish.name || ""
+        dishCategoryField.text = dish.category || ""
+        dishPriceField.text = String(dish.price || 0)
+        dishDiningModeBox.currentIndex = comboIndexByValue(dishDiningModeBox, dish.defaultDiningMode)
+        dishEatTimeField.text = String(dish.eatTimeMinutes || 15)
+        dishEffortField.text = String(dish.acquireEffortScore || 1)
+        dishImpactField.text = String(dish.mealImpactWeight || 1.0)
+        carbBox.currentIndex = comboIndexByValue(carbBox, dish.carbLevel)
+        fatBox.currentIndex = comboIndexByValue(fatBox, dish.fatLevel)
+        proteinBox.currentIndex = comboIndexByValue(proteinBox, dish.proteinLevel)
+        vitaminBox.currentIndex = comboIndexByValue(vitaminBox, dish.vitaminLevel)
+        fiberBox.currentIndex = comboIndexByValue(fiberBox, dish.fiberLevel)
+        satietyBox.currentIndex = comboIndexByValue(satietyBox, dish.satietyLevel)
+        burdenBox.currentIndex = comboIndexByValue(burdenBox, dish.digestiveBurdenLevel)
+        sleepinessBox.currentIndex = comboIndexByValue(sleepinessBox, dish.sleepinessRiskLevel)
+        flavorBox.currentIndex = comboIndexByValue(flavorBox, dish.flavorLevel)
+        odorBox.currentIndex = comboIndexByValue(odorBox, dish.odorLevel)
+        comboCheck.checked = !!dish.isCombo
+        beverageCheck.checked = !!dish.isBeverage
+        dishNotesField.text = dish.notes || ""
+    }
+
     function saveMerchant() {
         let ok = false
         if (editingMerchantId > 0) {
@@ -296,6 +387,16 @@ ScrollView {
     Component.onCompleted: {
         resetMerchantForm()
         resetDishForm()
+    }
+
+    Connections {
+        target: recommendationEngine
+
+        function onDishParseChanged() {
+            if (recommendationEngine.dishParseState === "success") {
+                root.applyParsedDish(recommendationEngine.parsedDish)
+            }
+        }
     }
 
     ColumnLayout {
@@ -530,65 +631,139 @@ ScrollView {
                     }
                 }
 
+                AutoHeightRectangle {
+                    Layout.fillWidth: true
+                    radius: 14
+                    color: "#fbf8ee"
+                    border.color: "#d8d3af"
+                    border.width: 1
+
+                    ColumnLayout {
+                        x: 12
+                        y: 12
+                        width: parent.width - 24
+                        height: implicitHeight
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "LLM 菜品输入"
+                            color: "#36391f"
+                            font.pixelSize: 16
+                            font.bold: true
+                            wrapMode: Text.Wrap
+                        }
+
+                        TextArea {
+                            id: dishLlmInput
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 92
+                            placeholderText: activeFocus || text.length > 0 ? "" : "例如：鸡腿饭 18 元，堂食，比较顶饱，油有点多，饭后不太犯困"
+                            wrapMode: TextEdit.Wrap
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: root.narrowLayout ? 1 : 2
+                            columnSpacing: 8
+                            rowSpacing: 8
+
+                            ReadableButton {
+                                Layout.fillWidth: true
+                                text: recommendationEngine.dishParseBusy ? "解析中..." : "解析并填入"
+                                enabled: !recommendationEngine.dishParseBusy
+                                         && dishLlmInput.text.trim().length > 0
+                                         && foodManager.merchantCount > 0
+                                onClicked: recommendationEngine.parseDishInput(
+                                               dishLlmInput.text,
+                                               dishMerchantBox.currentText)
+                            }
+
+                            ReadableButton {
+                                Layout.fillWidth: true
+                                text: "清空解析"
+                                enabled: !recommendationEngine.dishParseBusy
+                                onClicked: {
+                                    dishLlmInput.text = ""
+                                    recommendationEngine.clearDishParse()
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: recommendationEngine.dishParseState !== "ready"
+                                     || recommendationEngine.dishParseStatus.length > 0
+                            text: recommendationEngine.dishParseStatus
+                            color: recommendationEngine.dishParseState === "success"
+                                   ? "#3f6b3b"
+                                   : recommendationEngine.dishParseState === "parsing"
+                                     ? "#6b5846"
+                                     : "#8a4f2b"
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                }
+
                 GridLayout {
                     Layout.fillWidth: true
                     columns: root.narrowLayout ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    TextField {
+                    LabeledTextField {
                         id: dishNameField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "菜品名"
+                        label: "菜品名"
+                        hintText: "例如：鸡腿饭"
                     }
 
-                    ComboBox {
+                    LabeledComboBox {
                         id: dishMerchantBox
-                        Layout.fillWidth: true
+                        label: "商家"
                         model: foodManager.merchants
                         textRole: "name"
                         valueRole: "id"
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: dishCategoryField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "分类"
+                        label: "分类"
+                        hintText: "例如：盖饭 / 面 / 饮品"
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: dishPriceField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "价格"
+                        label: "价格"
+                        hintText: "单位：元"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
 
-                    ComboBox {
+                    LabeledComboBox {
                         id: dishDiningModeBox
-                        Layout.fillWidth: true
+                        label: "默认用餐方式"
                         model: root.diningModeOptions
                         textRole: "label"
                         valueRole: "value"
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: dishEatTimeField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "用餐分钟数"
+                        label: "用餐分钟"
+                        hintText: "例如：15"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: dishEffortField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "获取成本（1 容易 - 3 费事）"
+                        label: "获取成本"
+                        hintText: "1 容易，3 费事"
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
-                    TextField {
+                    LabeledTextField {
                         id: dishImpactField
-                        Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "餐次影响权重（普通餐 1.0，饮料/加餐可更低）"
+                        label: "餐次影响权重"
+                        hintText: "普通餐 1.0，饮料/加餐可更低"
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                 }
@@ -655,6 +830,14 @@ ScrollView {
                         id: beverageCheck
                         text: "饮料 / 零食"
                     }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "备注"
+                    color: "#4d5333"
+                    font.pixelSize: 13
+                    font.bold: true
                 }
 
                 TextArea {

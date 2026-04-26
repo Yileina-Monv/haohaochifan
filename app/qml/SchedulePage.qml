@@ -22,6 +22,8 @@ ScrollView {
     }
     id: root
     clip: true
+    contentWidth: availableWidth
+    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
     readonly property bool narrowLayout: root.availableWidth < 380
     property int editingEntryId: 0

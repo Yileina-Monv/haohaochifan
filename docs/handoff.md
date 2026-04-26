@@ -29,6 +29,20 @@ The project has moved beyond a static scaffold and now includes:
   fallback on invalid output
 - the Home page now has a minimum in-app LLM config path for API key / URL /
   model while still preserving env var fallback
+- the LLM layer now has four OpenAI-compatible request paths:
+  connection testing, recommendation supplement parsing, feedback parsing, and
+  single-dish natural-language form filling
+- the next planned LLM direction is a main-page natural-language task layer
+  with a compact mode switch for recommendation explanation, previous-meal
+  feedback, dish import, and temporary routine import; the long-term plan is in
+  `docs/llm-natural-language-business-plan.md`
+- the first slice of that main-page natural-language task layer has now
+  landed in `app/qml/Main.qml`: `推荐 / 反馈 / 菜品 / 日常` share one composer and a
+  structured local preview shape; recommendation still ends in the local
+  scorer, feedback writes only after confirmation through `MealLogManager`,
+  dish import writes only after confirmation through `FoodManager`, and
+  `日常` remains no-op preview scaffolding until temporary routine persistence
+  is implemented
 - supplement parsing UI state is now explicit enough to distinguish
   unconfigured, parsing, success, invalid response, network failure, and
   fallback-to-default
@@ -314,6 +328,25 @@ still confirms package `org.qtproject.example.MealAdvisor`,
 `res/mipmap-*-v4`, and native-code `arm64-v8a`. `adb devices -l` and
 `emulator -list-avds` remain empty in this shell, so the OpenSSL fix still
 needs real-device retest through Drawer `LLM 调试` -> `测试连接`.
+The latest main-page NLU slice then added the compact `推荐 / 反馈 / 菜品 / 日常`
+mode switch and shared preview/confirm contract in `app/qml/Main.qml`.
+`推荐` reuses supplement parsing before local scoring, `反馈` parses into local
+feedback fields and requires `确认保存`, `菜品` parses a single dish and imports
+through `FoodManager::addDish(...)` only after confirmation, and `日常` is a
+preview-only placeholder until temporary routine persistence exists. Desktop
+build passed, `MealAdvisorValidation.exe` exits `0` with the expected `48/50`
+result, and a 5-second desktop smoke launch produced empty stderr.
+After an Android screenshot showed the Home recommendation result area still
+creating horizontal movement, `Main.qml` now also constrains the main
+`resultScroll` content width to `availableWidth` and disables its horizontal
+scrollbar. Desktop `MealAdvisor` rebuild passed. The Android arm64 debug APK
+was rebuilt and copied to `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`;
+source and desktop APK SHA256 both match
+`6031CC8FBD3D330CD08C646730E07CB2435EF97CE8617669CFCC38DD77EACA0D`, size
+`71644274` bytes, timestamp `2026-04-26 19:25:49`. `aapt dump badging` still
+confirms package `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+`targetSdkVersion 36`, launcher icons, launchable Qt activity, and native-code
+`arm64-v8a`.
 
 ## Pages Implemented
 

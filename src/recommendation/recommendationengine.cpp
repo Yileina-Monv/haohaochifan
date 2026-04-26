@@ -36,6 +36,7 @@ using WeightMap = QHash<QString, double>;
 constexpr double kValueCompareEpsilon = 0.0001;
 constexpr int kSupplementTimeoutMs = 15000;
 constexpr int kFeedbackTimeoutMs = 15000;
+constexpr int kDishParseTimeoutMs = 15000;
 constexpr int kConnectionTestTimeoutMs = 10000;
 
 const QStringList kSupplementTopLevelKeys = {
@@ -75,6 +76,34 @@ const QStringList kFeedbackResultKeys = {
     QStringLiteral("freeTextFeedback")
 };
 
+const QStringList kDishTopLevelKeys = {
+    QStringLiteral("version"),
+    QStringLiteral("result")
+};
+
+const QStringList kDishResultKeys = {
+    QStringLiteral("name"),
+    QStringLiteral("category"),
+    QStringLiteral("price"),
+    QStringLiteral("defaultDiningMode"),
+    QStringLiteral("eatTimeMinutes"),
+    QStringLiteral("acquireEffortScore"),
+    QStringLiteral("carbLevel"),
+    QStringLiteral("fatLevel"),
+    QStringLiteral("proteinLevel"),
+    QStringLiteral("vitaminLevel"),
+    QStringLiteral("fiberLevel"),
+    QStringLiteral("satietyLevel"),
+    QStringLiteral("digestiveBurdenLevel"),
+    QStringLiteral("sleepinessRiskLevel"),
+    QStringLiteral("flavorLevel"),
+    QStringLiteral("odorLevel"),
+    QStringLiteral("isCombo"),
+    QStringLiteral("isBeverage"),
+    QStringLiteral("mealImpactWeight"),
+    QStringLiteral("notes")
+};
+
 const QList<double> kWeakIntentValues = {
     0.75, 0.85, 0.95, 1.0, 1.1, 1.2, 1.35
 };
@@ -100,6 +129,18 @@ const QStringList kSleepPlanValues = {
     QStringLiteral("nap_before_class"),
     QStringLiteral("no_class"),
     QStringLiteral("unknown")
+};
+
+const QStringList kDishLevelValues = {
+    QStringLiteral("low"),
+    QStringLiteral("medium"),
+    QStringLiteral("high")
+};
+
+const QStringList kDiningModeValues = {
+    QStringLiteral("dine_in"),
+    QStringLiteral("takeaway"),
+    QStringLiteral("delivery")
 };
 
 bool nearlyEqual(double left, double right)
@@ -680,6 +721,80 @@ QString feedbackParserUserPrompt(const QString &mealSummary, const QString &user
                "%2\n\n"
                "Return JSON only.")
         .arg(mealSummary.trimmed().isEmpty() ? QStringLiteral("unknown") : mealSummary.trimmed(),
+             userText.trimmed());
+}
+
+QString dishParserSystemPrompt()
+{
+    return QStringLiteral(
+        "You are MealAdvisor's dish input parser.\n\n"
+        "Your only job is to convert one user's natural-language dish description into a strictly valid JSON object for a local form.\n"
+        "You do NOT save data. You only fill fields for user review.\n\n"
+        "You are NOT a chatbot.\n"
+        "You do NOT explain your reasoning.\n"
+        "You do NOT output markdown.\n"
+        "You do NOT output code fences.\n"
+        "You do NOT output natural language.\n"
+        "You do NOT output extra keys.\n"
+        "You do NOT omit required keys.\n\n"
+        "You must always return exactly one JSON object with this shape:\n\n"
+        "{\n"
+        "  \"version\": \"dish_parser_v1\",\n"
+        "  \"result\": {\n"
+        "    \"name\": \"\",\n"
+        "    \"category\": \"\",\n"
+        "    \"price\": 0,\n"
+        "    \"defaultDiningMode\": \"dine_in\",\n"
+        "    \"eatTimeMinutes\": 15,\n"
+        "    \"acquireEffortScore\": 1,\n"
+        "    \"carbLevel\": \"medium\",\n"
+        "    \"fatLevel\": \"medium\",\n"
+        "    \"proteinLevel\": \"medium\",\n"
+        "    \"vitaminLevel\": \"medium\",\n"
+        "    \"fiberLevel\": \"medium\",\n"
+        "    \"satietyLevel\": \"medium\",\n"
+        "    \"digestiveBurdenLevel\": \"medium\",\n"
+        "    \"sleepinessRiskLevel\": \"medium\",\n"
+        "    \"flavorLevel\": \"medium\",\n"
+        "    \"odorLevel\": \"low\",\n"
+        "    \"isCombo\": false,\n"
+        "    \"isBeverage\": false,\n"
+        "    \"mealImpactWeight\": 1.0,\n"
+        "    \"notes\": \"\"\n"
+        "  }\n"
+        "}\n\n"
+        "Rules:\n"
+        "1. All keys are required.\n"
+        "2. No extra keys are allowed.\n"
+        "3. Only output JSON.\n"
+        "4. defaultDiningMode must be one of: dine_in, takeaway, delivery.\n"
+        "5. Level fields must be one of: low, medium, high.\n"
+        "6. price must be a number from 0 to 999.\n"
+        "7. eatTimeMinutes must be an integer from 1 to 240.\n"
+        "8. acquireEffortScore must be an integer from 1 to 3.\n"
+        "9. mealImpactWeight must be a number greater than 0 and no more than 3.\n"
+        "10. isCombo and isBeverage must be booleans.\n"
+        "11. name should be concise Chinese when possible. If the dish name is unclear, use the shortest plausible dish name from input.\n"
+        "12. notes should summarize assumptions or uncertainty in Chinese.\n\n"
+        "Interpretation rules:\n"
+        "- This is a form-fill helper, not a nutrition diagnosis.\n"
+        "- Prefer conservative medium levels when the description is vague.\n"
+        "- Use high only when common knowledge or explicit input strongly supports it.\n"
+        "- For drinks, snacks, or small add-ons, set isBeverage true when appropriate and mealImpactWeight below 1.0.\n"
+        "- For套餐, combo, set isCombo true.\n"
+        "- If the user gives a price or time, use it exactly when it fits the allowed range.");
+}
+
+QString dishParserUserPrompt(const QString &merchantName, const QString &userText)
+{
+    return QStringLiteral(
+               "Parse the following dish description into the required JSON format.\n\n"
+               "Selected merchant:\n"
+               "%1\n\n"
+               "User dish text:\n"
+               "%2\n\n"
+               "Return JSON only.")
+        .arg(merchantName.trimmed().isEmpty() ? QStringLiteral("unknown") : merchantName.trimmed(),
              userText.trimmed());
 }
 
@@ -1623,6 +1738,66 @@ bool readRequiredString(const QJsonObject &object,
     return true;
 }
 
+bool readRequiredDoubleRange(const QJsonObject &object,
+                             const QString &key,
+                             double minValue,
+                             double maxValue,
+                             double *value,
+                             QString *error)
+{
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isDouble()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 必须是数字").arg(key);
+        }
+        return false;
+    }
+
+    const double parsedValue = jsonValue.toDouble();
+    if (parsedValue < minValue || parsedValue > maxValue) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 超出支持范围").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = parsedValue;
+    }
+    return true;
+}
+
+bool readRequiredIntRange(const QJsonObject &object,
+                          const QString &key,
+                          int minValue,
+                          int maxValue,
+                          int *value,
+                          QString *error)
+{
+    const QJsonValue jsonValue = object.value(key);
+    if (!jsonValue.isDouble()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 必须是整数").arg(key);
+        }
+        return false;
+    }
+
+    const double parsedDouble = jsonValue.toDouble();
+    const int parsedValue = static_cast<int>(std::round(parsedDouble));
+    if (!nearlyEqual(parsedDouble, parsedValue) ||
+        parsedValue < minValue || parsedValue > maxValue) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 超出支持范围").arg(key);
+        }
+        return false;
+    }
+
+    if (value != nullptr) {
+        *value = parsedValue;
+    }
+    return true;
+}
+
 QVariantMap feedbackResultToVariantMap(
     const RecommendationEngine::FeedbackParseResult &result)
 {
@@ -1635,6 +1810,33 @@ QVariantMap feedbackResultToVariantMap(
     map.insert(QStringLiteral("repeatWillingness"), result.repeatWillingness);
     map.insert(QStringLiteral("wouldEatAgain"), result.wouldEatAgain);
     map.insert(QStringLiteral("freeTextFeedback"), result.freeTextFeedback);
+    return map;
+}
+
+QVariantMap dishResultToVariantMap(
+    const RecommendationEngine::DishParseResult &result)
+{
+    QVariantMap map;
+    map.insert(QStringLiteral("name"), result.name);
+    map.insert(QStringLiteral("category"), result.category);
+    map.insert(QStringLiteral("price"), result.price);
+    map.insert(QStringLiteral("defaultDiningMode"), result.defaultDiningMode);
+    map.insert(QStringLiteral("eatTimeMinutes"), result.eatTimeMinutes);
+    map.insert(QStringLiteral("acquireEffortScore"), result.acquireEffortScore);
+    map.insert(QStringLiteral("carbLevel"), result.carbLevel);
+    map.insert(QStringLiteral("fatLevel"), result.fatLevel);
+    map.insert(QStringLiteral("proteinLevel"), result.proteinLevel);
+    map.insert(QStringLiteral("vitaminLevel"), result.vitaminLevel);
+    map.insert(QStringLiteral("fiberLevel"), result.fiberLevel);
+    map.insert(QStringLiteral("satietyLevel"), result.satietyLevel);
+    map.insert(QStringLiteral("digestiveBurdenLevel"), result.digestiveBurdenLevel);
+    map.insert(QStringLiteral("sleepinessRiskLevel"), result.sleepinessRiskLevel);
+    map.insert(QStringLiteral("flavorLevel"), result.flavorLevel);
+    map.insert(QStringLiteral("odorLevel"), result.odorLevel);
+    map.insert(QStringLiteral("isCombo"), result.isCombo);
+    map.insert(QStringLiteral("isBeverage"), result.isBeverage);
+    map.insert(QStringLiteral("mealImpactWeight"), result.mealImpactWeight);
+    map.insert(QStringLiteral("notes"), result.notes);
     return map;
 }
 
@@ -2009,6 +2211,31 @@ bool RecommendationEngine::feedbackParseFallbackActive() const
 QVariantMap RecommendationEngine::parsedFeedback() const
 {
     return m_parsedFeedback;
+}
+
+QString RecommendationEngine::dishParseStatus() const
+{
+    return m_dishParseStatus;
+}
+
+QString RecommendationEngine::dishParseState() const
+{
+    return m_dishParseState;
+}
+
+bool RecommendationEngine::dishParseBusy() const
+{
+    return m_dishParseBusy;
+}
+
+bool RecommendationEngine::dishParseFallbackActive() const
+{
+    return m_dishParseFallbackActive;
+}
+
+QVariantMap RecommendationEngine::parsedDish() const
+{
+    return m_parsedDish;
 }
 
 QVariantList RecommendationEngine::activeWeightConfig() const
@@ -2887,6 +3114,12 @@ RecommendationEngine::neutralFeedbackParseResult()
     return FeedbackParseResult();
 }
 
+RecommendationEngine::DishParseResult
+RecommendationEngine::neutralDishParseResult()
+{
+    return DishParseResult();
+}
+
 RecommendationEngine::FeedbackParseOutcome
 RecommendationEngine::evaluateFeedbackResponse(const QString &sourceText,
                                                const QByteArray &responseBody,
@@ -2989,6 +3222,145 @@ RecommendationEngine::evaluateFeedbackResponse(const QString &sourceText,
     outcome.result = parsedResult;
     outcome.state = QStringLiteral("success");
     outcome.status = QStringLiteral("反馈解析成功，正在保存。");
+    outcome.accepted = true;
+    return outcome;
+}
+
+RecommendationEngine::DishParseOutcome
+RecommendationEngine::evaluateDishParseResponse(const QString &sourceText,
+                                                const QByteArray &responseBody,
+                                                const QString &networkError,
+                                                bool timedOut)
+{
+    DishParseOutcome outcome;
+    outcome.result = neutralDishParseResult();
+    outcome.result.notes = sourceText.trimmed();
+
+    if (!networkError.trimmed().isEmpty()) {
+        outcome.state = QStringLiteral("network_error");
+        outcome.status = timedOut
+                             ? QStringLiteral("菜品解析请求超时，请手动填写或稍后重试。")
+                             : QStringLiteral("菜品解析连接失败：%1。请手动填写或稍后重试。")
+                                   .arg(networkError.trimmed());
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    QJsonObject contractObject;
+    QString validationError;
+    if (!extractContractObjectFromApiResponse(responseBody, &contractObject,
+                                              &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品返回内容不是严格 JSON：%1。请手动填写或稍后重试。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!validateExactKeys(contractObject, kDishTopLevelKeys, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品 JSON 顶层结构非法：%1。请手动填写或稍后重试。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QString version =
+        contractObject.value(QStringLiteral("version")).toString().trimmed();
+    if (version != QStringLiteral("dish_parser_v1")) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品 JSON version 非法，请手动填写或稍后重试。");
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (!contractObject.value(QStringLiteral("result")).isObject()) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品 JSON result 结构非法，请手动填写或稍后重试。");
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    const QJsonObject resultObject =
+        contractObject.value(QStringLiteral("result")).toObject();
+    if (!validateExactKeys(resultObject, kDishResultKeys, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品 JSON result 字段非法：%1。请手动填写或稍后重试。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    DishParseResult parsedResult = neutralDishParseResult();
+    if (!readRequiredString(resultObject, QStringLiteral("name"),
+                            &parsedResult.name, &validationError) ||
+        !readRequiredString(resultObject, QStringLiteral("category"),
+                            &parsedResult.category, &validationError) ||
+        !readRequiredDoubleRange(resultObject, QStringLiteral("price"), 0.0, 999.0,
+                                 &parsedResult.price, &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("defaultDiningMode"),
+                           kDiningModeValues, &parsedResult.defaultDiningMode,
+                           &validationError) ||
+        !readRequiredIntRange(resultObject, QStringLiteral("eatTimeMinutes"), 1, 240,
+                              &parsedResult.eatTimeMinutes, &validationError) ||
+        !readRequiredIntRange(resultObject, QStringLiteral("acquireEffortScore"), 1, 3,
+                              &parsedResult.acquireEffortScore, &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("carbLevel"),
+                           kDishLevelValues, &parsedResult.carbLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("fatLevel"),
+                           kDishLevelValues, &parsedResult.fatLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("proteinLevel"),
+                           kDishLevelValues, &parsedResult.proteinLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("vitaminLevel"),
+                           kDishLevelValues, &parsedResult.vitaminLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("fiberLevel"),
+                           kDishLevelValues, &parsedResult.fiberLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("satietyLevel"),
+                           kDishLevelValues, &parsedResult.satietyLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("digestiveBurdenLevel"),
+                           kDishLevelValues, &parsedResult.digestiveBurdenLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("sleepinessRiskLevel"),
+                           kDishLevelValues, &parsedResult.sleepinessRiskLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("flavorLevel"),
+                           kDishLevelValues, &parsedResult.flavorLevel,
+                           &validationError) ||
+        !readAllowedString(resultObject, QStringLiteral("odorLevel"),
+                           kDishLevelValues, &parsedResult.odorLevel,
+                           &validationError) ||
+        !readRequiredBool(resultObject, QStringLiteral("isCombo"),
+                          &parsedResult.isCombo, &validationError) ||
+        !readRequiredBool(resultObject, QStringLiteral("isBeverage"),
+                          &parsedResult.isBeverage, &validationError) ||
+        !readRequiredDoubleRange(resultObject, QStringLiteral("mealImpactWeight"),
+                                 0.01, 3.0, &parsedResult.mealImpactWeight,
+                                 &validationError) ||
+        !readRequiredString(resultObject, QStringLiteral("notes"),
+                            &parsedResult.notes, &validationError)) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品 JSON 值非法：%1。请手动填写或稍后重试。")
+                             .arg(validationError);
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    if (parsedResult.name.trimmed().isEmpty()) {
+        outcome.state = QStringLiteral("invalid_response");
+        outcome.status = QStringLiteral("菜品名称为空，请补充更明确的菜品描述。");
+        outcome.fallbackUsed = true;
+        return outcome;
+    }
+
+    outcome.result = parsedResult;
+    outcome.state = QStringLiteral("success");
+    outcome.status = QStringLiteral("菜品解析成功，已填入表单，请复核后保存。");
     outcome.accepted = true;
     return outcome;
 }
@@ -3447,6 +3819,92 @@ void RecommendationEngine::parseFeedback(const QString &text, const QString &mea
     });
 }
 
+void RecommendationEngine::parseDishInput(const QString &text, const QString &merchantName)
+{
+    const QString trimmedText = text.trimmed();
+    if (trimmedText.isEmpty()) {
+        m_dishParseState = apiConfigured() ? QStringLiteral("ready")
+                                           : QStringLiteral("unconfigured");
+        m_dishParseFallbackActive = false;
+        m_dishParseStatus = QStringLiteral("先输入菜品描述，例如“鸡腿饭 18 元，堂食，比较顶饱”。");
+        m_parsedDish = dishResultToVariantMap(neutralDishParseResult());
+        emit dishParseChanged();
+        return;
+    }
+
+    if (!apiConfigured()) {
+        DishParseOutcome outcome;
+        outcome.result = neutralDishParseResult();
+        outcome.result.notes = trimmedText;
+        outcome.state = QStringLiteral("unconfigured");
+        outcome.status =
+            QStringLiteral("LLM API 未配置，无法自动解析菜品。请先在 LLM 调试里配置 API。");
+        outcome.fallbackUsed = true;
+        applyDishParseOutcome(outcome);
+        return;
+    }
+
+    m_dishParseBusy = true;
+    m_dishParseState = QStringLiteral("parsing");
+    m_dishParseFallbackActive = false;
+    m_dishParseStatus = QStringLiteral("正在解析菜品描述...");
+    m_parsedDish = dishResultToVariantMap(neutralDishParseResult());
+    emit dishParseChanged();
+
+    QNetworkRequest request{QUrl(AppConfig::llmApiUrl())};
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/json"));
+    request.setRawHeader("Authorization",
+                         QStringLiteral("Bearer %1")
+                             .arg(AppConfig::llmApiKey())
+                             .toUtf8());
+
+    QJsonArray messages;
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("system")},
+        {QStringLiteral("content"), dishParserSystemPrompt()}
+    });
+    messages.append(QJsonObject{
+        {QStringLiteral("role"), QStringLiteral("user")},
+        {QStringLiteral("content"), dishParserUserPrompt(merchantName, trimmedText)}
+    });
+
+    QJsonObject payload{
+        {QStringLiteral("model"), AppConfig::llmModel()},
+        {QStringLiteral("messages"), messages},
+        {QStringLiteral("temperature"), 0},
+        {QStringLiteral("response_format"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("json_object")}}}
+    };
+
+    QNetworkReply *reply = m_networkAccessManager.post(
+        request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QTimer *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (!reply->isFinished()) {
+            reply->setProperty("mealadvisorTimedOut", true);
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(kDishParseTimeoutMs);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, trimmedText]() {
+        const QByteArray responseBody = reply->readAll();
+        const QString networkError = reply->error() == QNetworkReply::NoError
+                                         ? QString()
+                                         : reply->errorString();
+        const bool timedOut = reply->property("mealadvisorTimedOut").toBool();
+        reply->deleteLater();
+        setDishParseBusy(false);
+
+        applyDishParseOutcome(
+            evaluateDishParseResponse(trimmedText, responseBody, networkError,
+                                      timedOut));
+    });
+}
+
 void RecommendationEngine::clearSupplement()
 {
     m_adjustment = neutralSupplementAdjustment();
@@ -3469,6 +3927,17 @@ void RecommendationEngine::clearFeedbackParse()
     m_feedbackParseStatus = QStringLiteral("反馈解析未开始。");
     m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
     emit feedbackParseChanged();
+}
+
+void RecommendationEngine::clearDishParse()
+{
+    m_dishParseBusy = false;
+    m_dishParseFallbackActive = false;
+    m_dishParseState = apiConfigured() ? QStringLiteral("ready")
+                                       : QStringLiteral("unconfigured");
+    m_dishParseStatus = QStringLiteral("菜品解析未开始。");
+    m_parsedDish = dishResultToVariantMap(neutralDishParseResult());
+    emit dishParseChanged();
 }
 
 void RecommendationEngine::setWeightOverrides(const QVariantMap &overrides)
@@ -3525,6 +3994,16 @@ void RecommendationEngine::setFeedbackParseBusy(bool busy)
     emit feedbackParseChanged();
 }
 
+void RecommendationEngine::setDishParseBusy(bool busy)
+{
+    if (m_dishParseBusy == busy) {
+        return;
+    }
+
+    m_dishParseBusy = busy;
+    emit dishParseChanged();
+}
+
 void RecommendationEngine::setInitialState()
 {
     m_adjustment = neutralSupplementAdjustment();
@@ -3544,6 +4023,12 @@ void RecommendationEngine::setInitialState()
     m_feedbackParseStatus = QStringLiteral("反馈解析未开始。");
     m_feedbackParseFallbackActive = false;
     m_parsedFeedback = feedbackResultToVariantMap(neutralFeedbackParseResult());
+    m_dishParseBusy = false;
+    m_dishParseState = apiConfigured() ? QStringLiteral("ready")
+                                       : QStringLiteral("unconfigured");
+    m_dishParseStatus = QStringLiteral("菜品解析未开始。");
+    m_dishParseFallbackActive = false;
+    m_parsedDish = dishResultToVariantMap(neutralDishParseResult());
     m_activeWeightConfig.clear();
     m_llmConnectionTestBusy = false;
     m_llmConnectionTestState = QStringLiteral("idle");
@@ -3593,4 +4078,14 @@ void RecommendationEngine::applyFeedbackOutcome(
     m_feedbackParseFallbackActive = outcome.fallbackUsed;
     m_parsedFeedback = feedbackResultToVariantMap(outcome.result);
     emit feedbackParseChanged();
+}
+
+void RecommendationEngine::applyDishParseOutcome(
+    const DishParseOutcome &outcome)
+{
+    m_dishParseState = outcome.state;
+    m_dishParseStatus = outcome.status;
+    m_dishParseFallbackActive = outcome.fallbackUsed;
+    m_parsedDish = dishResultToVariantMap(outcome.result);
+    emit dishParseChanged();
 }

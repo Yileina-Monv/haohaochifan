@@ -44,6 +44,23 @@ If the current task changes project direction or major behavior, also update
 - Home page supplement parsing now has a minimum in-app LLM config path for
   API key / URL / model, while still falling back to
   `MEALADVISOR_LLM_*` and `OPENAI_API_KEY`
+- The LLM layer currently supports four OpenAI-compatible request paths:
+  connection test, recommendation supplement parsing, feedback parsing, and
+  single-dish natural-language form filling.
+- The next LLM product direction is documented in
+  `docs/llm-natural-language-business-plan.md`: keep the main page simple, add
+  a mode switch, and route recommendation explanation, previous-meal feedback,
+  dish import, and temporary routine import through structured preview/confirm
+  actions rather than direct LLM writes.
+- The first main-page natural-language task slice is now implemented in
+  `app/qml/Main.qml`: `推荐 / 反馈 / 菜品 / 日常` share one composer and a local
+  preview shape (`intent`, `summary`, `actions`, `requiresConfirmation`,
+  `missingFields`, `state`). Recommendation still delegates final scoring to
+  `RecommendationEngine::runDecision()`, feedback writes only after preview
+  confirmation through `mealLogManager.saveMealFeedback(...)`, dish import
+  writes only after preview confirmation through `FoodManager::addDish(...)`,
+  and `日常` is intentionally preview/no-op scaffolding until temporary event
+  persistence exists.
 - Stage 6 supplement parsing now follows the docs-backed
   `supplement_parser_v1` contract:
   strict top-level JSON, fixed 13-field `result`, strict local validation, and
@@ -1543,9 +1560,63 @@ Completion signal:
       `targetSdkVersion 36`, launcher icons under `res/mipmap-*-v4`,
       launchable activity `org.qtproject.qt.android.bindings.QtActivity`, and
       native-code `arm64-v8a`.
-    - `adb devices -l` and `emulator -list-avds` are still empty in this shell,
-      so the fix has packaging evidence but still needs a real-device retest of
-      Drawer `LLM 调试` -> `测试连接`.
+  - `adb devices -l` and `emulator -list-avds` are still empty in this shell,
+    so the fix has packaging evidence but still needs a real-device retest of
+    Drawer `LLM 调试` -> `测试连接`.
+- Added the first LLM dish-input implementation and then captured the larger
+  natural-language business plan:
+  - `RecommendationEngine` now exposes dish parse state/status/result and
+    `parseDishInput(text, merchantName)`.
+  - The new parser uses a strict `dish_parser_v1` JSON contract and fills the
+    FoodPage form for user review instead of directly saving.
+  - FoodPage now has a visible `LLM 菜品输入` panel plus labeled dish core fields,
+    making numeric fields and low/medium/high selectors more understandable.
+  - Drawer horizontal dragging was disabled with `managementDrawer.interactive:
+    false`, and Food/Schedule/MealLog pages explicitly disable horizontal
+    scrolling.
+  - Desktop `MealAdvisorValidation` and `MealAdvisor` builds pass. Running
+    `MealAdvisorValidation.exe` exits `0` and reports `48/50`; the two failures
+    are still the known non-blocking baseline cases.
+  - Long-term LLM/NLU planning now lives in
+    `docs/llm-natural-language-business-plan.md`, with `docs/project-plan.md`
+    updated to reference it.
+- Implemented the first main-page natural-language task layer slice:
+  - Main page now has compact `推荐 / 反馈 / 菜品 / 日常` mode buttons above the
+    shared composer.
+  - `推荐` reuses `parseSupplement(...)` when text is present, then refreshes
+    the deterministic local recommendation engine. The preview explicitly
+    says the local engine remains the final scorer.
+  - `反馈` targets the currently selected/latest recent meal, reuses the strict
+    feedback parser, fills local feedback fields, and requires a separate
+    `确认保存` action before calling `mealLogManager.saveMealFeedback(...)`.
+    Drawer feedback copy and action text were also changed from
+    parse-and-save to parse-preview-confirm.
+  - `菜品` lets the user choose an existing merchant, reuses the single-dish
+    parser, shows a structured preview, and only imports through
+    `FoodManager::addDish(...)` after confirmation. It still avoids direct LLM
+    SQLite writes.
+  - `日常` now shows preview/no-op scaffolding and documents that
+    `temporary_events` persistence plus recommendation-context merge remain
+    future work.
+  - Desktop build for `MealAdvisor` and `MealAdvisorValidation` passed.
+    `MealAdvisorValidation.exe` exits `0` and remains `48/50`; the two failed
+    checks are the same known non-blocking baseline cases. A 5-second desktop
+    launch smoke had empty captured stderr.
+- Fixed the remaining Home-page horizontal scroll regression reported from the
+  Android screenshot:
+  - `app/qml/Main.qml` now sets the main recommendation result `ScrollView`
+    `contentWidth` to `availableWidth` and disables its horizontal scrollbar.
+  - Desktop `MealAdvisor` target rebuild passed.
+  - Android arm64 debug APK rebuilt and copied to
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`.
+  - Source and desktop APK SHA256 both match
+    `6031CC8FBD3D330CD08C646730E07CB2435EF97CE8617669CFCC38DD77EACA0D`.
+  - Desktop APK size is `71644274` bytes, timestamp `2026-04-26 19:25:49`.
+  - `aapt dump badging` still reports package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, launcher icons under `res/mipmap-*-v4`, launchable
+    activity `org.qtproject.qt.android.bindings.QtActivity`, and native-code
+    `arm64-v8a`.
 
 ## Next Steps
 
@@ -1553,17 +1624,32 @@ Priority note:
 
 - Stage 1-6 can be treated as sealed for Stage 7 preflight. Do not keep
   expanding Stage 6 or the recommendation core unless a new real regression is
-  found.
+  found. The next feature direction is now the main-page natural-language task
+  layer described in `docs/llm-natural-language-business-plan.md`.
 
 Immediate next work:
 
-- Attach a real Android device or create an AVD, install the latest APK, and
-  first re-test Drawer `LLM 调试` -> `测试连接` against DeepSeek. The previous
-  real-device failure was `TLS initialization failed`; the APK now packages the
-  Android OpenSSL backend and should be rechecked before doing broader UI QA.
-  Then validate launcher icon, updated beige main shell, placeholder hiding
-  while typing, Food labels, and Feedback LLM/manual fallback with screenshots,
-  UI-tree inspection, keyboard entry, scrolling, and portrait/landscape checks.
+- Run an Android runtime pass for the refreshed main shell if a device or AVD
+  becomes available. Validate the new `推荐 / 反馈 / 菜品 / 日常` composer modes,
+  preview card, feedback confirmation path, dish import confirmation path,
+  Drawer fallback controls, keyboard behavior, narrow-screen scrolling, and
+  confirm the Home recommendation result area no longer creates a horizontal
+  scrollbar or can be dragged left/right.
+- After runtime validation, the next feature slice should be either:
+  temporary routine persistence (`temporary_events` table/manager/parser and
+  recommendation-context merge), or a small C++ natural-language task service
+  to move the current QML-local preview contract out of the view layer.
+
+Then continue the blocked Android device pass when a device or AVD is
+available:
+
+- Install the latest APK and re-test Drawer `LLM 调试` -> `测试连接` against
+  DeepSeek. The previous real-device failure was `TLS initialization failed`;
+  the APK packages Android OpenSSL but still lacks a runtime device retest.
+- Validate launcher icon, beige main shell, placeholder hiding, Food labels,
+  horizontal-scroll removal, LLM dish input, and Feedback LLM/manual fallback
+  with screenshots, UI-tree inspection, keyboard entry, scrolling, and
+  portrait/landscape checks.
 
 1. Run real Android runtime validation on an attached device or newly
    configured AVD. Use adb/UI-tree-derived coordinates, screenshots, and
@@ -1678,6 +1764,11 @@ Use this sequence in the next window if continuing recommendation work:
   and LLM-first feedback flow still need real Android click/touch validation
   for Drawer open/close, section switching, recommendation send, feedback
   parse/manual fallback save, keyboard behavior, and narrow-screen scrolling.
+- The new main-page natural-language task slice is QML-local for now. It has
+  build, validation, and desktop smoke coverage, but still needs Android touch
+  validation for mode switching, preview visibility, confirmation actions,
+  soft-keyboard behavior, and the dish merchant selector. `日常` is deliberately
+  no-op preview scaffolding until temporary routine persistence is added.
 - The current recommendation baseline still does not raise
   `牛肉火锅单人套餐` into top-3 for the relaxed no-class high-budget dinner
   validation scenario, because that intent is not explicitly represented in the

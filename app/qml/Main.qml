@@ -249,7 +249,6 @@ ApplicationWindow {
     property int selectedMealId: 0
     property string feedbackStatus: "选择一条最近餐次后，可以直接补餐后反馈。"
     property bool feedbackManualVisible: false
-    property bool pendingFeedbackParseSave: false
     property int fullnessValue: 3
     property int sleepinessValue: 3
     property int comfortValue: 3
@@ -257,6 +256,18 @@ ApplicationWindow {
     property int tasteValue: 3
     property int repeatValue: 3
     property bool wouldEatAgain: true
+    property string taskMode: "recommend"
+    property string dishDraft: ""
+    property string routineDraft: ""
+    property string taskState: "idle"
+    property string taskIntent: ""
+    property string taskSummary: ""
+    property var taskActions: []
+    property var taskMissingFields: []
+    property bool taskRequiresConfirmation: false
+    property bool pendingFeedbackParsePreview: false
+    property bool pendingDishParsePreview: false
+    property int dishImportMerchantId: 0
 
     function clampScore(value, fallbackValue) {
         const parsed = Number(value || 0)
@@ -277,6 +288,99 @@ ApplicationWindow {
 
     function selectedMeal() {
         return findMeal(selectedMealId)
+    }
+
+    function setTaskPreview(intent, summary, actions, requiresConfirmation, missingFields, state) {
+        taskIntent = intent
+        taskSummary = summary
+        taskActions = actions ? actions : []
+        taskRequiresConfirmation = !!requiresConfirmation
+        taskMissingFields = missingFields ? missingFields : []
+        taskState = state && state.length > 0 ? state : "preview"
+    }
+
+    function clearTaskPreview() {
+        setTaskPreview("", "", [], false, [], "idle")
+    }
+
+    function taskModeLabel(mode) {
+        if (mode === "feedback") {
+            return "反馈"
+        }
+        if (mode === "dish") {
+            return "菜品"
+        }
+        if (mode === "routine") {
+            return "日常"
+        }
+        return "推荐"
+    }
+
+    function activeTaskPlaceholder() {
+        if (taskMode === "feedback") {
+            return "说说上一餐真实感受，比如有点撑、犯困、还想不想复吃..."
+        }
+        if (taskMode === "dish") {
+            return "输入看到的菜品，比如商家、菜名、价格、口味和饭后负担..."
+        }
+        if (taskMode === "routine") {
+            return "输入临时日常，比如今晚考试、运动、通勤或睡眠安排..."
+        }
+        return "下一餐想吃什么、预算、赶不赶时间..."
+    }
+
+    function draftForMode(mode) {
+        if (mode === "feedback") {
+            return feedbackDraft
+        }
+        if (mode === "dish") {
+            return dishDraft
+        }
+        if (mode === "routine") {
+            return routineDraft
+        }
+        return recommendDraft
+    }
+
+    function updateDraftForActiveMode(text) {
+        if (taskMode === "feedback") {
+            feedbackDraft = text
+        } else if (taskMode === "dish") {
+            dishDraft = text
+        } else if (taskMode === "routine") {
+            routineDraft = text
+        } else {
+            recommendDraft = text
+        }
+    }
+
+    function switchTaskMode(mode) {
+        updateDraftForActiveMode(composerInput.text)
+        taskMode = mode
+        composerInput.text = draftForMode(mode)
+        clearTaskPreview()
+        if (mode === "feedback") {
+            ensureSelectedMeal()
+        } else if (mode === "dish" && dishImportMerchantId <= 0
+                   && foodManager.merchants.length > 0) {
+            dishImportMerchantId = foodManager.merchants[0].id
+        }
+    }
+
+    function selectedDishMerchantName() {
+        for (let i = 0; i < foodManager.merchants.length; ++i) {
+            if (foodManager.merchants[i].id === dishImportMerchantId) {
+                return foodManager.merchants[i].name
+            }
+        }
+        return foodManager.merchants.length > 0 ? foodManager.merchants[0].name : ""
+    }
+
+    function selectedDishMerchantId() {
+        if (dishImportMerchantId > 0) {
+            return dishImportMerchantId
+        }
+        return foodManager.merchants.length > 0 ? foodManager.merchants[0].id : 0
     }
 
     function loadFeedbackFromMeal(meal) {
@@ -329,13 +433,38 @@ ApplicationWindow {
     }
 
     function sendComposer() {
-        recommendDraft = composerInput.text
+        updateDraftForActiveMode(composerInput.text)
+        if (taskMode === "feedback") {
+            parseFeedbackForPreview()
+            return
+        }
+        if (taskMode === "dish") {
+            parseDishForPreview()
+            return
+        }
+        if (taskMode === "routine") {
+            previewRoutineScaffold()
+            return
+        }
+
         pendingRecommendation = true
         if (recommendDraft.trim().length > 0) {
+            setTaskPreview("recommend_next_meal",
+                           "正在解析你的补充需求，随后仍由本地推荐引擎给出最终排序。",
+                           ["解析自然语言补充", "刷新本地三条推荐", "展示本地理由和风险提醒"],
+                           false,
+                           [],
+                           "parsing")
             recommendationEngine.parseSupplement(recommendDraft)
             maybeRunPendingRecommendation()
         } else {
             pendingRecommendation = false
+            setTaskPreview("recommend_next_meal",
+                           "正在使用当前时间、课表和本地规则刷新推荐。",
+                           ["刷新本地三条推荐", "展示本地理由和风险提醒"],
+                           false,
+                           [],
+                           "parsing")
             recommendationEngine.runDecision()
         }
     }
@@ -375,7 +504,7 @@ ApplicationWindow {
         }
     }
 
-    function applyParsedFeedbackAndSave() {
+    function applyParsedFeedbackToFields() {
         const parsed = recommendationEngine.parsedFeedback
         fullnessValue = clampScore(parsed.fullnessLevel, fullnessValue)
         sleepinessValue = clampScore(parsed.sleepinessLevel, sleepinessValue)
@@ -387,26 +516,172 @@ ApplicationWindow {
         if (parsed.freeTextFeedback && parsed.freeTextFeedback.length > 0) {
             feedbackDraft = parsed.freeTextFeedback
         }
-        feedbackManualVisible = false
-        if (saveFeedback("AI 已解析并保存反馈。")) {
-            feedbackManualVisible = false
-        }
+        composerInput.text = feedbackDraft
     }
 
-    function parseAndSaveFeedback() {
+    function parseFeedbackForPreview() {
+        ensureSelectedMeal()
         if (selectedMealId <= 0) {
-            feedbackStatus = "请先选择一条最近餐次。"
+            feedbackStatus = "请先保存一条餐次，再补餐后反馈。"
+            setTaskPreview("record_previous_meal_feedback",
+                           "没有可写入的最近餐次。",
+                           [],
+                           false,
+                           ["最近餐次"],
+                           "needs_clarification")
             return
         }
         if (feedbackDraft.trim().length === 0) {
             feedbackManualVisible = true
-            feedbackStatus = "先写一句饭后感受；也可以直接使用下方手动打分。"
+            feedbackStatus = "先写一句饭后感受；也可以直接使用手动打分。"
+            setTaskPreview("record_previous_meal_feedback",
+                           "需要先输入反馈文本，或在抽屉里手动打分后保存。",
+                           ["目标餐次：" + selectedMealSummary()],
+                           true,
+                           ["饭后感受"],
+                           "needs_clarification")
             return
         }
 
-        pendingFeedbackParseSave = true
-        feedbackStatus = "正在解析并准备保存反馈..."
+        pendingFeedbackParsePreview = true
+        feedbackStatus = "正在解析反馈，解析后需要确认才会保存。"
+        setTaskPreview("record_previous_meal_feedback",
+                       "正在把自然语言反馈解析为本地反馈字段。",
+                       ["目标餐次：" + selectedMealSummary(), "解析口味、复吃、饱腹、犯困、舒适、专注"],
+                       true,
+                       [],
+                       "parsing")
         recommendationEngine.parseFeedback(feedbackDraft, selectedMealSummary())
+    }
+
+    function parseAndSaveFeedback() {
+        parseFeedbackForPreview()
+    }
+
+    function parseDishForPreview() {
+        if (dishDraft.trim().length === 0) {
+            setTaskPreview("import_dishes",
+                           "需要先输入菜品描述。",
+                           [],
+                           true,
+                           ["菜品描述"],
+                           "needs_clarification")
+            return
+        }
+        if (selectedDishMerchantId() <= 0) {
+            setTaskPreview("import_dishes",
+                           "导入菜品前需要至少有一个商家。可先在管理抽屉的餐食配置里新增商家。",
+                           ["不会直接写入数据库"],
+                           true,
+                           ["商家"],
+                           "needs_clarification")
+            return
+        }
+
+        pendingDishParsePreview = true
+        setTaskPreview("import_dishes",
+                       "正在解析菜品，解析结果会先预览，确认后才会通过 FoodManager 保存。",
+                       ["目标商家：" + selectedDishMerchantName(), "解析菜名、价格、用餐方式和低/中/高标签"],
+                       true,
+                       [],
+                       "parsing")
+        recommendationEngine.parseDishInput(dishDraft, selectedDishMerchantName())
+    }
+
+    function previewRoutineScaffold() {
+        if (routineDraft.trim().length === 0) {
+            setTaskPreview("import_temporary_routine",
+                           "需要先输入临时日常内容。",
+                           [],
+                           false,
+                           ["临时日常描述"],
+                           "needs_clarification")
+            return
+        }
+
+        setTaskPreview("import_temporary_routine",
+                       "已生成临时日常预览。本轮还没有新增临时日常表，所以不会写入数据库或影响推荐。",
+                       ["输入内容：" + routineDraft, "后续需要 temporary_events 持久化和推荐上下文合并"],
+                       false,
+                       [],
+                       "preview")
+    }
+
+    function confirmTaskPreview() {
+        if (taskIntent === "record_previous_meal_feedback") {
+            taskState = "applying"
+            if (saveFeedback("反馈已保存。")) {
+                feedbackManualVisible = false
+                setTaskPreview("record_previous_meal_feedback",
+                               "反馈已通过 MealLogManager 保存到目标餐次。",
+                               ["已更新反馈表", "可在反馈与记录里继续查看或修改"],
+                               false,
+                               [],
+                               "applied")
+            } else {
+                setTaskPreview("record_previous_meal_feedback",
+                               mealLogManager.lastError.length > 0 ? mealLogManager.lastError : "反馈保存失败。",
+                               [],
+                               true,
+                               [],
+                               "failed")
+            }
+            return
+        }
+
+        if (taskIntent === "import_dishes") {
+            const dish = recommendationEngine.parsedDish
+            const merchantId = selectedDishMerchantId()
+            if (merchantId <= 0 || !dish || !dish.name || dish.name.length === 0) {
+                setTaskPreview("import_dishes",
+                               "菜品预览信息不完整，暂不能导入。",
+                               [],
+                               true,
+                               ["商家", "菜品名"],
+                               "needs_clarification")
+                return
+            }
+
+            taskState = "applying"
+            const ok = foodManager.addDish(dish.name,
+                                           merchantId,
+                                           dish.category || "",
+                                           Number(dish.price || 0),
+                                           dish.defaultDiningMode || "dine_in",
+                                           Number(dish.eatTimeMinutes || 15),
+                                           Number(dish.acquireEffortScore || 1),
+                                           dish.carbLevel || "medium",
+                                           dish.fatLevel || "medium",
+                                           dish.proteinLevel || "medium",
+                                           dish.vitaminLevel || "medium",
+                                           dish.fiberLevel || "medium",
+                                           dish.satietyLevel || "medium",
+                                           dish.digestiveBurdenLevel || "medium",
+                                           dish.sleepinessRiskLevel || "medium",
+                                           dish.flavorLevel || "medium",
+                                           dish.odorLevel || "low",
+                                           !!dish.isCombo,
+                                           !!dish.isBeverage,
+                                           Number(dish.mealImpactWeight || 1.0),
+                                           dish.notes || "")
+            if (ok) {
+                mealLogManager.reload()
+                recommendationEngine.runDecision()
+                setTaskPreview("import_dishes",
+                               "菜品已通过 FoodManager 保存。",
+                               [dish.name + " | " + selectedDishMerchantName(), "本地推荐已刷新"],
+                               false,
+                               [],
+                               "applied")
+            } else {
+                setTaskPreview("import_dishes",
+                               foodManager.lastError.length > 0 ? foodManager.lastError : "菜品保存失败。",
+                               [],
+                               true,
+                               [],
+                               "failed")
+            }
+        }
     }
 
     function syncLlmFields() {
@@ -430,24 +705,89 @@ ApplicationWindow {
 
         function onBusyChanged() {
             maybeRunPendingRecommendation()
+            if (!recommendationEngine.busy && taskIntent === "recommend_next_meal"
+                    && taskState === "parsing") {
+                setTaskPreview("recommend_next_meal",
+                               "本地推荐已刷新。排序仍由本地规则生成，LLM 只负责解析补充需求。",
+                               ["查看当前三条推荐", "确认推荐理由和提醒"],
+                               false,
+                               [],
+                               "preview")
+            }
         }
 
         function onFeedbackParseChanged() {
-            if (!pendingFeedbackParseSave) {
+            if (!pendingFeedbackParsePreview) {
                 return
             }
 
             const state = recommendationEngine.feedbackParseState
             if (state === "success") {
-                pendingFeedbackParseSave = false
-                applyParsedFeedbackAndSave()
+                pendingFeedbackParsePreview = false
+                applyParsedFeedbackToFields()
+                feedbackManualVisible = true
+                feedbackStatus = "已解析反馈，请确认分数后保存。"
+                setTaskPreview("record_previous_meal_feedback",
+                               "反馈已解析，请确认后写入目标餐次。",
+                               [
+                                   "目标餐次：" + selectedMealSummary(),
+                                   "口味 " + tasteValue + " / 复吃 " + repeatValue,
+                                   "饱腹 " + fullnessValue + " / 犯困 " + sleepinessValue,
+                                   "舒适 " + comfortValue + " / 专注 " + focusValue
+                               ],
+                               true,
+                               [],
+                               "preview")
                 return
             }
 
             if (state !== "parsing" && state.length > 0) {
-                pendingFeedbackParseSave = false
+                pendingFeedbackParsePreview = false
                 feedbackManualVisible = true
                 feedbackStatus = recommendationEngine.feedbackParseStatus
+                setTaskPreview("record_previous_meal_feedback",
+                               recommendationEngine.feedbackParseStatus,
+                               ["可改用手动打分保存", "不会写入无效解析结果"],
+                               true,
+                               [],
+                               "failed")
+            }
+        }
+
+        function onDishParseChanged() {
+            if (!pendingDishParsePreview) {
+                return
+            }
+
+            const state = recommendationEngine.dishParseState
+            if (state === "success") {
+                pendingDishParsePreview = false
+                const dish = recommendationEngine.parsedDish
+                setTaskPreview("import_dishes",
+                               "菜品已解析，请确认后导入。",
+                               [
+                                   "目标商家：" + selectedDishMerchantName(),
+                                   "菜品：" + (dish.name || "未命名"),
+                                   "价格：" + Number(dish.price || 0).toFixed(0) + " 元",
+                                   "标签：碳水 " + (dish.carbLevel || "medium")
+                                       + " / 蛋白 " + (dish.proteinLevel || "medium")
+                                       + " / 负担 " + (dish.digestiveBurdenLevel || "medium")
+                                       + " / 犯困 " + (dish.sleepinessRiskLevel || "medium")
+                               ],
+                               true,
+                               [],
+                               "preview")
+                return
+            }
+
+            if (state !== "parsing" && state.length > 0) {
+                pendingDishParsePreview = false
+                setTaskPreview("import_dishes",
+                               recommendationEngine.dishParseStatus,
+                               ["可去餐食配置手动新增", "不会写入无效解析结果"],
+                               true,
+                               [],
+                               "failed")
             }
         }
     }
@@ -541,6 +881,8 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
             ColumnLayout {
                 id: contentColumn
@@ -548,6 +890,13 @@ ApplicationWindow {
                 width: Math.max(resultScroll.availableWidth, 1)
                 height: implicitHeight
                 spacing: 12
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: taskState !== "idle"
+                    visible: active
+                    sourceComponent: taskPreviewComponent
+                }
 
                 Loader {
                     Layout.fillWidth: true
@@ -570,6 +919,53 @@ ApplicationWindow {
                 height: implicitHeight
                 spacing: 12
 
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: width < 360 ? 2 : 4
+                    columnSpacing: 8
+                    rowSpacing: 8
+
+                    ModeButton {
+                        text: "推荐"
+                        selected: taskMode === "recommend"
+                        onClicked: switchTaskMode("recommend")
+                    }
+
+                    ModeButton {
+                        text: "反馈"
+                        selected: taskMode === "feedback"
+                        onClicked: switchTaskMode("feedback")
+                    }
+
+                    ModeButton {
+                        text: "菜品"
+                        selected: taskMode === "dish"
+                        onClicked: switchTaskMode("dish")
+                    }
+
+                    ModeButton {
+                        text: "日常"
+                        selected: taskMode === "routine"
+                        onClicked: switchTaskMode("routine")
+                    }
+                }
+
+                ComboBox {
+                    id: dishMerchantSelector
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    visible: taskMode === "dish"
+                    textRole: "name"
+                    valueRole: "id"
+                    model: foodManager.merchants
+                    onActivated: dishImportMerchantId = currentValue
+                    Component.onCompleted: {
+                        if (dishImportMerchantId <= 0 && foodManager.merchants.length > 0) {
+                            dishImportMerchantId = foodManager.merchants[0].id
+                        }
+                    }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
@@ -578,19 +974,29 @@ ApplicationWindow {
                         id: composerInput
                         Layout.fillWidth: true
                         Layout.preferredHeight: 92
-                        hintText: "说说现在想吃什么、预算、赶不赶时间..."
+                        hintText: activeTaskPlaceholder()
                         wrapMode: TextEdit.Wrap
                         text: recommendDraft
-                        onTextChanged: recommendDraft = text
-                        Component.onCompleted: hintText = "想吃什么、预算、赶不赶时间..."
+                        onTextChanged: updateDraftForActiveMode(text)
                     }
 
                     ReadableButton {
                         Layout.preferredWidth: 88
                         Layout.preferredHeight: 92
                         primary: true
-                        enabled: !recommendationEngine.busy
-                        text: recommendationEngine.busy ? "处理中" : "发送"
+                        enabled: taskMode === "feedback"
+                                 ? !recommendationEngine.feedbackParseBusy
+                                 : taskMode === "dish"
+                                   ? !recommendationEngine.dishParseBusy
+                                   : taskMode === "recommend"
+                                     ? (!recommendationEngine.busy
+                                        && recommendationEngine.supplementState !== "parsing")
+                                     : true
+                        text: (recommendationEngine.busy
+                               || recommendationEngine.supplementState === "parsing"
+                               || recommendationEngine.feedbackParseBusy
+                               || recommendationEngine.dishParseBusy)
+                              ? "处理中" : "发送"
                         onClicked: sendComposer()
                     }
                 }
@@ -601,6 +1007,140 @@ ApplicationWindow {
                     text: mealLogManager.lastError
                     color: "#9a4b2f"
                     wrapMode: Text.Wrap
+                }
+            }
+        }
+    }
+
+    Component {
+        id: taskPreviewComponent
+
+        AutoHeightRectangle {
+            Layout.fillWidth: true
+            radius: 18
+            color: taskState === "failed" ? "#fff5f1"
+                   : taskState === "applied" ? "#f1f7ec"
+                   : "#fff5e8"
+            border.color: taskState === "failed" ? "#e9b9aa"
+                          : taskState === "applied" ? "#b9d0a9"
+                          : "#dec4a3"
+            border.width: 1
+
+            ColumnLayout {
+                x: 16
+                y: 16
+                width: parent.width - 32
+                height: implicitHeight
+                spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: taskModeLabel(taskMode) + "预览"
+                        color: "#3d2d22"
+                        font.pixelSize: 20
+                        font.bold: true
+                        wrapMode: Text.Wrap
+                    }
+
+                    Label {
+                        text: taskState === "parsing" ? "解析中"
+                              : taskState === "needs_clarification" ? "需补充"
+                              : taskState === "applied" ? "已应用"
+                              : taskState === "failed" ? "未应用"
+                              : "待确认"
+                        color: taskState === "failed" ? "#8a4635" : "#6b5846"
+                        font.bold: true
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: taskSummary
+                    color: "#6b5846"
+                    wrapMode: Text.Wrap
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: taskActions.length > 0
+                    spacing: 4
+
+                    Repeater {
+                        model: taskActions
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "- " + modelData
+                            color: "#705e4d"
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    visible: taskMissingFields.length > 0
+                    spacing: 8
+
+                    Repeater {
+                        model: taskMissingFields
+
+                        AutoHeightRectangle {
+                            width: missingLabel.implicitWidth + 18
+                            height: missingLabel.implicitHeight + 10
+                            radius: 10
+                            color: "#fffaf2"
+                            border.color: "#d59b7c"
+                            border.width: 1
+
+                            Label {
+                                id: missingLabel
+                                anchors.centerIn: parent
+                                text: "缺：" + modelData
+                                color: "#8a4635"
+                            }
+                        }
+                    }
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    visible: taskRequiresConfirmation
+                    columns: width < 360 ? 1 : 2
+                    columnSpacing: 8
+                    rowSpacing: 8
+
+                    ReadableButton {
+                        Layout.fillWidth: true
+                        primary: true
+                        enabled: taskState === "preview"
+                                 || (taskState === "failed"
+                                     && taskIntent === "record_previous_meal_feedback")
+                        text: taskIntent === "import_dishes" ? "确认导入"
+                              : taskIntent === "record_previous_meal_feedback" ? "确认保存"
+                              : "确认"
+                        onClicked: confirmTaskPreview()
+                    }
+
+                    ReadableButton {
+                        Layout.fillWidth: true
+                        text: taskIntent === "import_dishes" && taskMissingFields.length > 0
+                              ? "打开餐食配置"
+                              : "清除预览"
+                        onClicked: {
+                            if (taskIntent === "import_dishes" && taskMissingFields.length > 0) {
+                                drawerSection = "food"
+                                syncLlmFields()
+                                managementDrawer.open()
+                            } else {
+                                clearTaskPreview()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -864,7 +1404,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
-                    text: "优先用一句话记录这餐的真实感受；能连上 LLM 时会自动解析成具体分数，失败时再手动打分。"
+                    text: "优先用一句话记录这餐的真实感受；能连上 LLM 时会解析成具体分数，确认后才保存。"
                     color: "#6b5846"
                     wrapMode: Text.Wrap
                 }
@@ -888,7 +1428,7 @@ ApplicationWindow {
                     ReadableButton {
                         Layout.fillWidth: true
                         enabled: selectedMealId > 0 && !recommendationEngine.feedbackParseBusy
-                        text: recommendationEngine.feedbackParseBusy ? "解析中..." : "解析并保存反馈"
+                        text: recommendationEngine.feedbackParseBusy ? "解析中..." : "解析预览反馈"
                         onClicked: parseAndSaveFeedback()
                     }
 
@@ -971,7 +1511,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: feedbackManualVisible
                     enabled: selectedMealId > 0
-                    text: "保存手动反馈"
+                    text: "确认保存反馈"
                     onClicked: saveFeedback("手动反馈已保存。")
                 }
 
@@ -1041,7 +1581,7 @@ ApplicationWindow {
         id: managementDrawer
         edge: Qt.RightEdge
         modal: true
-        interactive: true
+        interactive: false
         width: window.width < 640 || window.height < 520
                ? Math.max(300, window.width - 12)
                : Math.min(window.width - 16, Math.max(420, Math.round(window.width * 0.52)))
