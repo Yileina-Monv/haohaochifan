@@ -22,6 +22,11 @@ The project has moved beyond a static scaffold and now includes:
 - `FoodManager` plus a working merchant/dish management page
 - `MealLogManager` plus a working meal logging page with multi-dish support
 - an upgraded V2 recommendation engine on the home page
+- the first V3 recommendation budget-gate pass inside the existing engine:
+  budget no longer participates in default weighted scoring, explicit
+  `budgetMode` / `budgetLimitYuan` inputs apply a fixed over-budget penalty,
+  and legacy `budgetFlexIntent` parser responses are still mapped for
+  compatibility
 - natural-language supplement parsing that can turn free text into temporary
   scoring weights through an OpenAI-compatible API
 - the Stage 6 supplement parser now follows the docs-backed
@@ -29,6 +34,25 @@ The project has moved beyond a static scaffold and now includes:
   fallback on invalid output
 - the Home page now has a minimum in-app LLM config path for API key / URL /
   model while still preserving env var fallback
+- the LLM layer now has four OpenAI-compatible request paths:
+  connection testing, recommendation supplement parsing, feedback parsing, and
+  single-dish natural-language form filling
+- the three RecommendationEngine parser system prompts now include explicit
+  food/scenario guardrails: supplement parsing separates refined-carb avoidance
+  from protein/beef preference, feedback parsing records actual user experience
+  rather than inferred macro effects, and dish parsing treats static dish
+  attributes separately from runtime class/nap/study context
+- the next planned LLM direction is a main-page natural-language task layer
+  with a compact mode switch for recommendation explanation, previous-meal
+  feedback, dish import, and temporary routine import; the long-term plan is in
+  `docs/llm-natural-language-business-plan.md`
+- the first slice of that main-page natural-language task layer has now
+  landed in `app/qml/Main.qml`: `推荐 / 反馈 / 菜品 / 日常` share one composer and a
+  structured local preview shape; recommendation still ends in the local
+  scorer, feedback writes only after confirmation through `MealLogManager`,
+  dish import writes only after confirmation through `FoodManager`, and
+  `日常` remains no-op preview scaffolding until temporary routine persistence
+  is implemented
 - supplement parsing UI state is now explicit enough to distinguish
   unconfigured, parsing, success, invalid response, network failure, and
   fallback-to-default
@@ -314,6 +338,36 @@ still confirms package `org.qtproject.example.MealAdvisor`,
 `res/mipmap-*-v4`, and native-code `arm64-v8a`. `adb devices -l` and
 `emulator -list-avds` remain empty in this shell, so the OpenSSL fix still
 needs real-device retest through Drawer `LLM 调试` -> `测试连接`.
+The latest main-page NLU slice then added the compact `推荐 / 反馈 / 菜品 / 日常`
+mode switch and shared preview/confirm contract in `app/qml/Main.qml`.
+`推荐` reuses supplement parsing before local scoring, `反馈` parses into local
+feedback fields and requires `确认保存`, `菜品` parses a single dish and imports
+through `FoodManager::addDish(...)` only after confirmation, and `日常` is a
+preview-only placeholder until temporary routine persistence exists. Desktop
+build passed, `MealAdvisorValidation.exe` exits `0` with the expected `48/50`
+result, and a 5-second desktop smoke launch produced empty stderr.
+After an Android screenshot showed the Home recommendation result area still
+creating horizontal movement, `Main.qml` now also constrains the main
+`resultScroll` content width to `availableWidth` and disables its horizontal
+scrollbar. Desktop `MealAdvisor` rebuild passed. The Android arm64 debug APK
+was rebuilt and copied to `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`;
+source and desktop APK SHA256 both match
+`6031CC8FBD3D330CD08C646730E07CB2435EF97CE8617669CFCC38DD77EACA0D`, size
+`71644274` bytes, timestamp `2026-04-26 19:25:49`. `aapt dump badging` still
+confirms package `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+`targetSdkVersion 36`, launcher icons, launchable Qt activity, and native-code
+`arm64-v8a`.
+The latest V3 recommendation pass then changed the existing
+`RecommendationEngine` budget behavior instead of adding a parallel engine:
+budget is now a triggered gate, not a default scoring factor. The supplement
+parser prompt and strict response validation now include `budgetMode` and
+`budgetLimitYuan`; legacy 13-field parser responses still work through
+compatibility mapping. Normal ranking no longer rewards cheap dishes or
+punishes expensive dishes when budget is not mentioned. Triggered budgets keep
+over-line dishes as fallback candidates but apply a fixed `-40` score penalty
+and show a budget warning. Desktop build passed, `MealAdvisorValidation.exe`
+now reports `51/51`, and a 5-second desktop smoke launch produced empty
+stderr.
 
 ## Pages Implemented
 
@@ -389,6 +443,14 @@ next step from scratch.
   - longer non-breakfast multi-meal compensation
   - post-meal sleep-plan modifiers
   - Chinese-ready reasons and warnings
+- Recommendation V3 budget behavior now uses:
+  - `budgetMode = none | strict | relaxed`
+  - `budgetLimitYuan`
+  - no default price reward or price penalty when budget is not mentioned
+  - a fixed `-40` over-budget gate penalty when budget is triggered
+  - budget warnings only for triggered budget gates
+  - scene-fit handling for acquisition / long-meal cost so class-day lunch
+    pressure is not enforced through price
 - Recommendation runs are now persisted into `recommendation_records`
 - Meal feedback is now persisted and minimally editable from the Meals page
 - Dish-level historical feedback now feeds back into recommendation scoring
@@ -411,10 +473,15 @@ next step from scratch.
   builds more than the earlier desktop-only verification path
 - The parser request path now uses docs-backed `system` + `user` prompts,
   OpenAI Chat Completions style payloads, and `temperature = 0`
+- Current parser prompt guardrails distinguish refined white staples / sugary
+  drinks from high-fiber carbs, and avoid treating high-protein low-carb meals
+  such as beef hotpot as high-carb/"carb coma" dishes unless carb add-ons,
+  very large portions, or explicit user feedback support that label.
 - The parser response path now enforces:
   - strict JSON only
   - `version = supplement_parser_v1`
-  - exact 13-field `result`
+  - exact V3 `result` with `budgetMode` / `budgetLimitYuan`, while still
+    accepting the previous 13-field result for compatibility
   - allowed fixed-step values / enums / nap-minute set
   - neutral fallback on invalid output
 - `MealAdvisorValidation` now covers supplement parser fallback / success cases
@@ -486,7 +553,12 @@ next step from scratch.
     pass still need validation against longer real-data usage and Android
     touch interaction, even though the desktop build still compiles and the
     app starts locally.
-10. The current validated non-LLM recommendation baseline still keeps
+10. Superseded by the V3 pass: the latest validation baseline is `51/51`.
+    Relaxed no-class dinner can include `牛肉火锅单人套餐` in top-3, strict
+    budget input pushes over-line dinner candidates down, and seeded feedback
+    insights now include `sleepiness_watch`, `stable_favorites`, and
+    `low_repeat`.
+11. The current validated non-LLM recommendation baseline still keeps
     `牛肉火锅单人套餐` out of top-3 for a relaxed no-class high-budget dinner
     scenario, because that intent is not explicitly represented in the current
     non-LLM local context. The Stage 6 parsed `budgetFlexIntent` path now does

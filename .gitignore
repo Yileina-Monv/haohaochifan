@@ -41,6 +41,8 @@ local.properties
 .env
 .env.*
 config.local.json
+validation-output.txt
+validation-settings/
 *.db
 *.db-journal
 *.sqlite

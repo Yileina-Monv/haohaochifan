@@ -9,19 +9,10 @@ ScrollView {
                         ? childrenRect.y + childrenRect.height + childrenRect.y
                         : 0
     }
-    component ReadableButton: Button {
-        id: readableButton
-
-        contentItem: Label {
-            text: readableButton.text
-            color: readableButton.enabled ? "#2c241b" : "#8a8176"
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-    }
     id: root
     clip: true
+    contentWidth: availableWidth
+    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
     readonly property bool narrowLayout: root.availableWidth < 380
     property int editingEntryId: 0
@@ -142,7 +133,7 @@ ScrollView {
         AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
-            radius: 24
+            radius: 16
             color: "#f8f3ea"
             border.color: "#d6c6b2"
             border.width: 1
@@ -172,12 +163,12 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    ReadableButton {
+                    StyledButton {
                         text: "刷新"
                         onClicked: scheduleManager.reload()
                     }
 
-                    ReadableButton {
+                    StyledButton {
                         text: "恢复预置课表"
                         onClicked: {
                             if (scheduleManager.resetToProvidedSchedule()) {
@@ -205,7 +196,7 @@ ScrollView {
         AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
-            radius: 20
+            radius: 16
             color: "#e7efe1"
 
             ColumnLayout {
@@ -271,7 +262,7 @@ ScrollView {
             AutoHeightRectangle {
                 Layout.fillWidth: true
                 Layout.margins: 16
-                radius: 20
+                radius: 16
                 color: modelData.entryCount > 0 ? "#f0e5d5" : "#efece7"
 
                 ColumnLayout {
@@ -338,12 +329,12 @@ ScrollView {
                                             Layout.fillWidth: true
                                             spacing: 8
 
-                                            ReadableButton {
+                                            StyledButton {
                                                 text: "编辑"
                                                 onClicked: loadEntry(modelData)
                                             }
 
-                                            ReadableButton {
+                                            StyledButton {
                                                 text: "删除"
                                                 onClicked: {
                                                     if (scheduleManager.deleteEntry(modelData.id) && editingEntryId === modelData.id) {
@@ -401,7 +392,7 @@ ScrollView {
         AutoHeightRectangle {
             Layout.fillWidth: true
             Layout.margins: 16
-            radius: 20
+            radius: 16
             color: "#dde8ef"
 
             ColumnLayout {
@@ -422,7 +413,7 @@ ScrollView {
                         color: "#223747"
                     }
 
-                    ReadableButton {
+                    StyledButton {
                         visible: editingEntryId > 0
                         text: "取消"
                         onClicked: resetScheduleForm()
@@ -435,7 +426,7 @@ ScrollView {
                     columnSpacing: 12
                     rowSpacing: 10
 
-                    ComboBox {
+                    StyledComboBox {
                         id: weekdayBox
                         Layout.fillWidth: true
                         model: [
@@ -448,13 +439,13 @@ ScrollView {
                         valueRole: "value"
                     }
 
-                    TextField {
+                    StyledTextField {
                         id: courseNameField
                         Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "课程名"
+                        hintText: "课程名"
                     }
 
-                    ComboBox {
+                    StyledComboBox {
                         id: startPeriodBox
                         Layout.fillWidth: true
                         model: scheduleManager.classPeriods
@@ -462,7 +453,7 @@ ScrollView {
                         valueRole: "periodIndex"
                     }
 
-                    ComboBox {
+                    StyledComboBox {
                         id: endPeriodBox
                         Layout.fillWidth: true
                         model: scheduleManager.classPeriods
@@ -470,19 +461,19 @@ ScrollView {
                         valueRole: "periodIndex"
                     }
 
-                    TextField {
+                    StyledTextField {
                         id: locationField
                         Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "地点"
+                        hintText: "地点"
                     }
 
-                    TextField {
+                    StyledTextField {
                         id: campusZoneField
                         Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "校区区域"
+                        hintText: "校区区域"
                     }
 
-                    ComboBox {
+                    StyledComboBox {
                         id: intensityBox
                         Layout.fillWidth: true
                         model: root.intensityOptions
@@ -490,14 +481,14 @@ ScrollView {
                         valueRole: "value"
                     }
 
-                    TextField {
+                    StyledTextField {
                         id: notesField
                         Layout.fillWidth: true
-                        placeholderText: activeFocus || text.length > 0 ? "" : "备注"
+                        hintText: "备注"
                     }
                 }
 
-                ReadableButton {
+                StyledButton {
                     text: editingEntryId > 0 ? "更新条目" : "添加条目"
                     onClicked: saveEntry()
                 }

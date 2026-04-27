@@ -695,6 +695,9 @@ int main(int argc, char *argv[])
                  {QStringLiteral("drinkIntent"), outcome.adjustment.drinkIntent},
                  {QStringLiteral("budgetFlexIntent"),
                   outcome.adjustment.budgetFlexIntent},
+                 {QStringLiteral("budgetMode"), outcome.adjustment.budgetMode},
+                 {QStringLiteral("budgetLimitYuan"),
+                  outcome.adjustment.budgetLimitYuan},
                  {QStringLiteral("classConstraintWeight"),
                   outcome.adjustment.classConstraintWeight},
                  {QStringLiteral("postMealSleepPlan"),
@@ -1110,6 +1113,8 @@ int main(int argc, char *argv[])
              {QStringLiteral("carbIntent"), 0.95},
              {QStringLiteral("drinkIntent"), 1.2},
              {QStringLiteral("budgetFlexIntent"), 1.1},
+             {QStringLiteral("budgetMode"), QStringLiteral("relaxed")},
+             {QStringLiteral("budgetLimitYuan"), 100},
              {QStringLiteral("classConstraintWeight"), 1.25},
              {QStringLiteral("postMealSleepPlan"), QStringLiteral("stay_awake")},
              {QStringLiteral("plannedNapMinutes"), 0},
@@ -1129,7 +1134,9 @@ int main(int argc, char *argv[])
               validOutcome.accepted &&
                   validOutcome.state == QStringLiteral("success") &&
                   !validOutcome.fallbackUsed &&
-                  qFuzzyCompare(validOutcome.adjustment.classConstraintWeight, 1.25),
+                  qFuzzyCompare(validOutcome.adjustment.classConstraintWeight, 1.25) &&
+                  validOutcome.adjustment.budgetMode == QStringLiteral("relaxed") &&
+                  qFuzzyCompare(validOutcome.adjustment.budgetLimitYuan, 100.0),
               QStringLiteral("%1 | %2")
                   .arg(validOutcome.state, validOutcome.status));
 
@@ -1173,6 +1180,8 @@ int main(int argc, char *argv[])
              {QStringLiteral("carbIntent"), 0.95},
              {QStringLiteral("drinkIntent"), 1.2},
              {QStringLiteral("budgetFlexIntent"), 1.1},
+             {QStringLiteral("budgetMode"), QStringLiteral("relaxed")},
+             {QStringLiteral("budgetLimitYuan"), 100},
              {QStringLiteral("classConstraintWeight"), 1.7},
              {QStringLiteral("postMealSleepPlan"), QStringLiteral("stay_awake")},
              {QStringLiteral("plannedNapMinutes"), 25},
@@ -1561,6 +1570,8 @@ int main(int argc, char *argv[])
         budgetRelaxResult.insert(QStringLiteral("carbIntent"), 1.0);
         budgetRelaxResult.insert(QStringLiteral("drinkIntent"), 1.0);
         budgetRelaxResult.insert(QStringLiteral("budgetFlexIntent"), 1.1);
+        budgetRelaxResult.insert(QStringLiteral("budgetMode"), QStringLiteral("relaxed"));
+        budgetRelaxResult.insert(QStringLiteral("budgetLimitYuan"), 100);
         budgetRelaxResult.insert(QStringLiteral("classConstraintWeight"), 1.0);
         budgetRelaxResult.insert(QStringLiteral("postMealSleepPlan"),
                                  QStringLiteral("unknown"));
@@ -1589,6 +1600,30 @@ int main(int argc, char *argv[])
                   QStringLiteral("%1 | top3: %2")
                       .arg(budgetRelaxParse.state,
                            joinCandidateNames(budgetRelaxDinner)));
+
+        QJsonObject strictBudgetContract = validContract;
+        QJsonObject strictBudgetResult = budgetRelaxResult;
+        strictBudgetResult.insert(QStringLiteral("budgetFlexIntent"), 1.0);
+        strictBudgetResult.insert(QStringLiteral("budgetMode"), QStringLiteral("strict"));
+        strictBudgetResult.insert(QStringLiteral("budgetLimitYuan"), 40);
+        strictBudgetContract.insert(QStringLiteral("result"), strictBudgetResult);
+        const ParseScenarioResult strictBudgetParse = runParseScenario(
+            &recommendationEngine, &mockServer,
+            QStringLiteral("今天控制预算，吃便宜点"),
+            MockHttpResponse{200, buildChatPayload(strictBudgetContract),
+                             "application/json", 0});
+        const QVariantList strictBudgetDinner = runScenario(
+            &recommendationEngine, QStringLiteral("2026-04-23T18:04:00"));
+        addResult(&results,
+                  QStringLiteral("Strict budget supplement pushes over-line dinner candidates down"),
+                  strictBudgetParse.completed &&
+                      strictBudgetParse.state == QStringLiteral("success") &&
+                      top3Excludes(strictBudgetDinner,
+                                   {QStringLiteral("牛肉火锅单人套餐"),
+                                    QStringLiteral("双层吉士牛堡套餐")}),
+                  QStringLiteral("%1 | top3: %2")
+                      .arg(strictBudgetParse.state,
+                           joinCandidateNames(strictBudgetDinner)));
 
         const ParseScenarioResult malformedParse = runParseScenario(
             &recommendationEngine, &mockServer, QStringLiteral("鎯冲枬鍙箰"),
