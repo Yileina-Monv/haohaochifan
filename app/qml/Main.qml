@@ -10,87 +10,6 @@ ApplicationWindow {
                         : 0
     }
 
-    component ReadableButton: Button {
-        id: readableButton
-        property bool primary: false
-
-        Layout.preferredHeight: 42
-        flat: true
-        padding: 0
-
-        background: Rectangle {
-            radius: 14
-            color: !readableButton.enabled
-                   ? "#eadfce"
-                   : readableButton.primary
-                     ? (readableButton.down ? "#8f5926" : (readableButton.hovered ? "#b36f2e" : "#a8662c"))
-                     : (readableButton.down ? "#ead6bd" : (readableButton.hovered ? "#f5e7d3" : "#fff9f0"))
-            border.color: readableButton.primary ? "#8f5926" : "#dcc3a4"
-            border.width: 1
-        }
-
-        contentItem: Label {
-            text: readableButton.text
-            color: !readableButton.enabled ? "#9a8d7d" : (readableButton.primary ? "#fffaf2" : "#473525")
-            font.pixelSize: 15
-            font.bold: readableButton.primary
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-            maximumLineCount: 1
-        }
-    }
-
-    component ModeButton: Button {
-        id: modeButton
-        property bool selected: false
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: 42
-        flat: true
-
-        background: Rectangle {
-            radius: 14
-            color: modeButton.selected ? "#9b632d" : "#fff9f0"
-            border.color: modeButton.selected ? "#9b632d" : "#dcc3a4"
-            border.width: 1
-        }
-
-        contentItem: Label {
-            text: modeButton.text
-            color: modeButton.selected ? "#fffaf2" : "#473525"
-            font.bold: modeButton.selected
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-    }
-
-    component DrawerSectionButton: Button {
-        id: drawerButton
-        property bool selected: false
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: 42
-        flat: true
-
-        background: Rectangle {
-            radius: 14
-            color: drawerButton.selected ? "#9b632d" : "#fff7ec"
-            border.color: drawerButton.selected ? "#9b632d" : "#dec4a3"
-            border.width: 1
-        }
-
-        contentItem: Label {
-            text: drawerButton.text
-            color: drawerButton.selected ? "#fffaf2" : "#51402f"
-            font.pixelSize: 13
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-    }
-
     component FeedbackMetric: RowLayout {
         id: metric
         property string label: ""
@@ -103,7 +22,7 @@ ApplicationWindow {
             Layout.preferredWidth: 52
             Layout.alignment: Qt.AlignVCenter
             text: metric.label
-            color: "#6b5846"
+            color: theme.secondaryText
         }
 
         SpinBox {
@@ -124,9 +43,10 @@ ApplicationWindow {
         padding: 0
 
         background: Rectangle {
-            radius: 16
-            color: menuButton.down ? "#ead6bd" : (menuButton.hovered ? "#f6e8d3" : "#fff9f0")
-            border.color: "#dec4a3"
+            radius: theme.radiusControl
+            color: menuButton.down ? theme.surfacePressed
+                  : (menuButton.hovered ? theme.surfaceHover : theme.surface)
+            border.color: theme.border
             border.width: 1
         }
 
@@ -145,7 +65,7 @@ ApplicationWindow {
                         width: 18
                         height: 2
                         radius: 1
-                        color: "#6d4928"
+                        color: theme.primary
                     }
                 }
             }
@@ -160,9 +80,10 @@ ApplicationWindow {
         padding: 0
 
         background: Rectangle {
-            radius: 16
-            color: closeButton.down ? "#ead6bd" : (closeButton.hovered ? "#f6e8d3" : "#fff9f0")
-            border.color: "#dec4a3"
+            radius: theme.radiusControl
+            color: closeButton.down ? theme.surfacePressed
+                  : (closeButton.hovered ? theme.surfaceHover : theme.surface)
+            border.color: theme.border
             border.width: 1
         }
 
@@ -174,7 +95,7 @@ ApplicationWindow {
                 width: 18
                 height: 2
                 radius: 1
-                color: "#6d4928"
+                color: theme.primary
                 anchors.centerIn: parent
                 rotation: 45
             }
@@ -183,56 +104,18 @@ ApplicationWindow {
                 width: 18
                 height: 2
                 radius: 1
-                color: "#6d4928"
+                color: theme.primary
                 anchors.centerIn: parent
                 rotation: -45
             }
         }
     }
 
-    component StyledTextArea: TextArea {
-        id: styledTextArea
-        property string hintText: ""
-
-        font.pixelSize: 15
-        color: "#3f3024"
-        placeholderText: activeFocus || text.length > 0 ? "" : hintText
-        placeholderTextColor: "#9c8b78"
-        wrapMode: TextEdit.Wrap
-        clip: true
-        leftPadding: 14
-        rightPadding: 14
-        topPadding: 12
-        bottomPadding: 12
-
-        background: Rectangle {
-            radius: 14
-            color: "#fffaf2"
-            border.color: styledTextArea.activeFocus ? "#b97834" : "#dec4a3"
-            border.width: styledTextArea.activeFocus ? 2 : 1
-        }
-    }
-
-    component StyledTextField: TextField {
-        id: styledTextField
-        property string hintText: ""
-
-        font.pixelSize: 15
-        color: "#3f3024"
-        placeholderText: activeFocus || text.length > 0 ? "" : hintText
-        placeholderTextColor: "#9c8b78"
-        leftPadding: 14
-        rightPadding: 14
-
-        background: Rectangle {
-            radius: 14
-            color: "#fffaf2"
-            border.color: styledTextField.activeFocus ? "#b97834" : "#dec4a3"
-            border.width: styledTextField.activeFocus ? 2 : 1
-        }
-    }
-
     id: window
+
+    Theme {
+        id: theme
+    }
 
     width: 420
     height: 800
@@ -240,7 +123,9 @@ ApplicationWindow {
     minimumHeight: 560
     visible: true
     title: "MealAdvisor"
-    color: "#f4eadc"
+    color: theme.page
+    font.family: Qt.platform.os === "android" ? "sans-serif" : "Microsoft YaHei UI"
+    font.pixelSize: 15
 
     property string drawerSection: "llm"
     property bool pendingRecommendation: false
@@ -476,6 +361,31 @@ ApplicationWindow {
         }
 
         return meal.eatenAt + " | " + meal.mealTypeLabel + " | "
+                + (meal.dishSummary.length > 0 ? meal.dishSummary : "未记录菜品")
+    }
+
+    function compactMealTime(eatenAt) {
+        const value = String(eatenAt || "")
+        const parts = value.split("T")
+        if (parts.length !== 2) {
+            return value
+        }
+
+        const dateParts = parts[0].split("-")
+        const timeParts = parts[1].split(":")
+        if (dateParts.length !== 3 || timeParts.length < 2) {
+            return value
+        }
+
+        return dateParts[1] + "-" + dateParts[2] + " " + timeParts[0] + ":" + timeParts[1]
+    }
+
+    function mealFeedbackLabel(meal) {
+        if (!meal) {
+            return ""
+        }
+
+        return compactMealTime(meal.eatenAt) + " | " + meal.mealTypeLabel + " | "
                 + (meal.dishSummary.length > 0 ? meal.dishSummary : "未记录菜品")
     }
 
@@ -804,11 +714,7 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#fff9f0" }
-            GradientStop { position: 0.55; color: "#f4eadc" }
-            GradientStop { position: 1.0; color: "#eadcc8" }
-        }
+        color: theme.page
     }
 
     Rectangle {
@@ -817,29 +723,26 @@ ApplicationWindow {
             right: parent.right
             top: parent.top
         }
-        height: 170
-        color: "#ead0ad"
-        opacity: 0.55
+        height: 132
+        color: theme.pageAccent
+        opacity: 0.85
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 14
+        anchors.margins: window.width < 380 ? 12 : 16
+        spacing: 12
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 22
-            color: "#fdf7ed"
-            border.color: "#ead8bf"
-            border.width: 1
+            fill: theme.surface
+            stroke: theme.border
+            padding: 16
 
             RowLayout {
-                x: 16
-                y: 16
-                width: parent.width - 32
+                width: parent.width
                 height: implicitHeight
-                spacing: 14
+                spacing: 12
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -848,8 +751,8 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         text: "MealAdvisor"
-                        color: "#3d2d22"
-                        font.pixelSize: 28
+                        color: theme.text
+                        font.pixelSize: theme.titleSize
                         font.bold: true
                         elide: Text.ElideRight
                     }
@@ -858,7 +761,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         visible: false
                         text: appState.planningSummary + " · " + appState.budgetSummary
-                        color: "#52645b"
+                        color: theme.secondaryText
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
@@ -905,17 +808,12 @@ ApplicationWindow {
             }
         }
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 22
-            color: "#fdf7ed"
-            border.color: "#ead8bf"
-            border.width: 1
+            padding: 14
 
             ColumnLayout {
-                x: 14
-                y: 14
-                width: parent.width - 28
+                width: parent.width
                 height: implicitHeight
                 spacing: 12
 
@@ -925,35 +823,42 @@ ApplicationWindow {
                     columnSpacing: 8
                     rowSpacing: 8
 
-                    ModeButton {
+                    StyledButton {
+                        Layout.fillWidth: true
+                        compact: true
                         text: "推荐"
                         selected: taskMode === "recommend"
                         onClicked: switchTaskMode("recommend")
                     }
 
-                    ModeButton {
+                    StyledButton {
+                        Layout.fillWidth: true
+                        compact: true
                         text: "反馈"
                         selected: taskMode === "feedback"
                         onClicked: switchTaskMode("feedback")
                     }
 
-                    ModeButton {
+                    StyledButton {
+                        Layout.fillWidth: true
+                        compact: true
                         text: "菜品"
                         selected: taskMode === "dish"
                         onClicked: switchTaskMode("dish")
                     }
 
-                    ModeButton {
+                    StyledButton {
+                        Layout.fillWidth: true
+                        compact: true
                         text: "日常"
                         selected: taskMode === "routine"
                         onClicked: switchTaskMode("routine")
                     }
                 }
 
-                ComboBox {
+                StyledComboBox {
                     id: dishMerchantSelector
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 44
                     visible: taskMode === "dish"
                     textRole: "name"
                     valueRole: "id"
@@ -980,7 +885,7 @@ ApplicationWindow {
                         onTextChanged: updateDraftForActiveMode(text)
                     }
 
-                    ReadableButton {
+                    StyledButton {
                         Layout.preferredWidth: 88
                         Layout.preferredHeight: 92
                         primary: true
@@ -1005,7 +910,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: false
                     text: mealLogManager.lastError
-                    color: "#9a4b2f"
+                        color: theme.danger
                     wrapMode: Text.Wrap
                 }
             }
@@ -1015,21 +920,18 @@ ApplicationWindow {
     Component {
         id: taskPreviewComponent
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 18
-            color: taskState === "failed" ? "#fff5f1"
-                   : taskState === "applied" ? "#f1f7ec"
-                   : "#fff5e8"
-            border.color: taskState === "failed" ? "#e9b9aa"
-                          : taskState === "applied" ? "#b9d0a9"
-                          : "#dec4a3"
-            border.width: 1
+            fill: taskState === "failed" ? theme.dangerPanel
+                  : taskState === "applied" ? theme.greenPanel
+                  : theme.warmPanel
+            stroke: taskState === "failed" ? theme.dangerBorder
+                    : taskState === "applied" ? theme.borderStrong
+                    : theme.border
+            padding: 16
 
             ColumnLayout {
-                x: 16
-                y: 16
-                width: parent.width - 32
+                width: parent.width
                 height: implicitHeight
                 spacing: 10
 
@@ -1040,8 +942,8 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         text: taskModeLabel(taskMode) + "预览"
-                        color: "#3d2d22"
-                        font.pixelSize: 20
+                        color: theme.text
+                        font.pixelSize: theme.sectionTitleSize
                         font.bold: true
                         wrapMode: Text.Wrap
                     }
@@ -1052,7 +954,7 @@ ApplicationWindow {
                               : taskState === "applied" ? "已应用"
                               : taskState === "failed" ? "未应用"
                               : "待确认"
-                        color: taskState === "failed" ? "#8a4635" : "#6b5846"
+                        color: taskState === "failed" ? theme.danger : theme.secondaryText
                         font.bold: true
                     }
                 }
@@ -1060,7 +962,7 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: taskSummary
-                    color: "#6b5846"
+                    color: theme.secondaryText
                     wrapMode: Text.Wrap
                 }
 
@@ -1075,7 +977,7 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             text: "- " + modelData
-                            color: "#705e4d"
+                            color: theme.secondaryText
                             wrapMode: Text.Wrap
                         }
                     }
@@ -1092,16 +994,16 @@ ApplicationWindow {
                         AutoHeightRectangle {
                             width: missingLabel.implicitWidth + 18
                             height: missingLabel.implicitHeight + 10
-                            radius: 10
-                            color: "#fffaf2"
-                            border.color: "#d59b7c"
+                            radius: theme.radiusControl
+                            color: theme.dangerPanel
+                            border.color: theme.dangerBorder
                             border.width: 1
 
                             Label {
                                 id: missingLabel
                                 anchors.centerIn: parent
                                 text: "缺：" + modelData
-                                color: "#8a4635"
+                                color: theme.danger
                             }
                         }
                     }
@@ -1114,7 +1016,7 @@ ApplicationWindow {
                     columnSpacing: 8
                     rowSpacing: 8
 
-                    ReadableButton {
+                    StyledButton {
                         Layout.fillWidth: true
                         primary: true
                         enabled: taskState === "preview"
@@ -1126,7 +1028,7 @@ ApplicationWindow {
                         onClicked: confirmTaskPreview()
                     }
 
-                    ReadableButton {
+                    StyledButton {
                         Layout.fillWidth: true
                         text: taskIntent === "import_dishes" && taskMissingFields.length > 0
                               ? "打开餐食配置"
@@ -1153,25 +1055,22 @@ ApplicationWindow {
             width: contentColumn.width
             spacing: 12
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 18
-            color: "#fdf7ed"
-            border.color: "#ead8bf"
-            border.width: 1
+            fill: theme.surface
+            stroke: theme.border
+            padding: 16
 
             ColumnLayout {
-                x: 16
-                y: 16
-                width: parent.width - 32
+                width: parent.width
                 height: implicitHeight
                 spacing: 10
 
                 Label {
                     Layout.fillWidth: true
                     text: "当前推荐"
-                    color: "#3d2d22"
-                    font.pixelSize: 22
+                    color: theme.text
+                    font.pixelSize: theme.sectionTitleSize
                     font.bold: true
                     wrapMode: Text.Wrap
                 }
@@ -1179,7 +1078,7 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: recommendationEngine.summary
-                    color: "#6b5846"
+                    color: theme.secondaryText
                     wrapMode: Text.Wrap
                 }
             }
@@ -1188,17 +1087,14 @@ ApplicationWindow {
         Repeater {
             model: recommendationEngine.candidates
 
-            AutoHeightRectangle {
+            SectionCard {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#fff9f0"
-                border.color: "#ead8bf"
-                border.width: 1
+                fill: theme.surface
+                stroke: theme.border
+                padding: 14
 
                 ColumnLayout {
-                    x: 14
-                    y: 14
-                    width: parent.width - 28
+                    width: parent.width
                     height: implicitHeight
                     spacing: 8
 
@@ -1206,7 +1102,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         text: "#" + modelData.rank + " " + modelData.dishName
                               + (modelData.merchantName.length > 0 ? (" | " + modelData.merchantName) : "")
-                        color: "#3f3024"
+                        color: theme.bodyText
                         font.bold: true
                         wrapMode: Text.Wrap
                     }
@@ -1215,7 +1111,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         text: "分数 " + modelData.score + " | 价格 "
                               + Number(modelData.price).toFixed(0) + " 元"
-                        color: "#6b5846"
+                        color: theme.secondaryText
                         wrapMode: Text.Wrap
                     }
 
@@ -1223,7 +1119,7 @@ ApplicationWindow {
                         visible: modelData.reason && modelData.reason.length > 0
                         Layout.fillWidth: true
                         text: modelData.reason
-                        color: "#705e4d"
+                        color: theme.secondaryText
                         wrapMode: Text.Wrap
                     }
 
@@ -1238,7 +1134,7 @@ ApplicationWindow {
                             Label {
                                 Layout.fillWidth: true
                                 text: "- " + modelData
-                                color: "#705e4d"
+                                color: theme.secondaryText
                                 wrapMode: Text.Wrap
                             }
                         }
@@ -1247,9 +1143,9 @@ ApplicationWindow {
                     AutoHeightRectangle {
                         visible: modelData.warnings && modelData.warnings.length > 0
                         Layout.fillWidth: true
-                        radius: 12
-                        color: "#fff5f1"
-                        border.color: "#e9b9aa"
+                        radius: theme.radiusSmall
+                        color: theme.dangerPanel
+                        border.color: theme.dangerBorder
                         border.width: 1
 
                         ColumnLayout {
@@ -1261,7 +1157,7 @@ ApplicationWindow {
 
                             Label {
                                 text: "提醒"
-                                color: "#8a4635"
+                                color: theme.danger
                                 font.bold: true
                             }
 
@@ -1271,7 +1167,7 @@ ApplicationWindow {
                                 Label {
                                     Layout.fillWidth: true
                                     text: "- " + modelData
-                                    color: "#8a4635"
+                                    color: theme.danger
                                     wrapMode: Text.Wrap
                                 }
                             }
@@ -1289,16 +1185,16 @@ ApplicationWindow {
                             AutoHeightRectangle {
                                 width: breakdownLabel.implicitWidth + 16
                                 height: breakdownLabel.implicitHeight + 10
-                                radius: 10
-                                color: "#f5e7d3"
-                                border.color: "#dec4a3"
+                                radius: theme.radiusControl
+                                color: theme.warmPanel
+                                border.color: theme.border
                                 border.width: 1
 
                                 Label {
                                     id: breakdownLabel
                                     anchors.centerIn: parent
                                     text: modelData.label + " " + modelData.score
-                                    color: "#6b5846"
+                                    color: theme.secondaryText
                                 }
                             }
                         }
@@ -1317,30 +1213,27 @@ ApplicationWindow {
             width: Math.max(parent ? parent.width : contentColumn.width, 1)
             spacing: 12
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 18
-            color: "#fdf7ed"
-            border.color: "#ead8bf"
-            border.width: 1
+            fill: theme.warmPanel
+            stroke: theme.border
+            padding: 16
 
             ColumnLayout {
-                x: 16
-                y: 16
-                width: parent.width - 32
+                width: parent.width
                 height: implicitHeight
                 spacing: 12
 
                 Label {
                     Layout.fillWidth: true
                     text: "饭后反馈"
-                    color: "#3d2d22"
-                    font.pixelSize: 22
+                    color: theme.text
+                    font.pixelSize: theme.sectionTitleSize
                     font.bold: true
                     wrapMode: Text.Wrap
                 }
 
-                ComboBox {
+                StyledComboBox {
                     id: mealSelector
                     Layout.fillWidth: true
                     Layout.preferredHeight: 46
@@ -1349,8 +1242,7 @@ ApplicationWindow {
                     model: mealLogManager.recentMeals.map(function(meal) {
                         return {
                             id: meal.id,
-                            label: meal.eatenAt + " | " + meal.mealTypeLabel + " | "
-                                   + (meal.dishSummary.length > 0 ? meal.dishSummary : "未记录菜品")
+                            label: mealFeedbackLabel(meal)
                         }
                     })
                     onActivated: {
@@ -1364,17 +1256,14 @@ ApplicationWindow {
                     }
                 }
 
-                AutoHeightRectangle {
+                SectionCard {
                     Layout.fillWidth: true
-                    radius: 14
-                    color: "#fff5e8"
-                    border.color: "#dec4a3"
-                    border.width: 1
+                    fill: theme.surface
+                    stroke: theme.border
+                    padding: 12
 
                     ColumnLayout {
-                        x: 12
-                        y: 12
-                        width: parent.width - 24
+                        width: parent.width
                         height: implicitHeight
                         spacing: 6
 
@@ -1383,9 +1272,9 @@ ApplicationWindow {
                             text: {
                                 const meal = selectedMeal()
                                 return meal ? (meal.dishSummary.length > 0 ? meal.dishSummary : "这餐没有菜品摘要")
-                                            : "暂无最近餐次"
+                                                : "暂无最近餐次"
                             }
-                            color: "#473525"
+                            color: theme.bodyText
                             font.bold: true
                             wrapMode: Text.Wrap
                         }
@@ -1396,7 +1285,7 @@ ApplicationWindow {
                                 const meal = selectedMeal()
                                 return meal ? meal.feedbackSummary : "先在餐次记录里保存一餐。"
                             }
-                            color: "#786754"
+                            color: theme.secondaryText
                             wrapMode: Text.Wrap
                         }
                     }
@@ -1405,7 +1294,7 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: "优先用一句话记录这餐的真实感受；能连上 LLM 时会解析成具体分数，确认后才保存。"
-                    color: "#6b5846"
+                    color: theme.secondaryText
                     wrapMode: Text.Wrap
                 }
 
@@ -1425,14 +1314,14 @@ ApplicationWindow {
                     columnSpacing: 8
                     rowSpacing: 8
 
-                    ReadableButton {
+                    StyledButton {
                         Layout.fillWidth: true
                         enabled: selectedMealId > 0 && !recommendationEngine.feedbackParseBusy
                         text: recommendationEngine.feedbackParseBusy ? "解析中..." : "解析预览反馈"
                         onClicked: parseAndSaveFeedback()
                     }
 
-                    ReadableButton {
+                    StyledButton {
                         Layout.fillWidth: true
                         text: feedbackManualVisible ? "收起手动打分" : "手动打分"
                         onClicked: feedbackManualVisible = !feedbackManualVisible
@@ -1443,7 +1332,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: feedbackManualVisible
                     text: "手动分数说明：1 表示很弱/很差，5 表示很强/很好；犯困 5 表示很困。"
-                    color: "#786754"
+                    color: theme.secondaryText
                     wrapMode: Text.Wrap
                 }
 
@@ -1507,7 +1396,7 @@ ApplicationWindow {
                     onToggled: window.wouldEatAgain = checked
                 }
 
-                ReadableButton {
+                StyledButton {
                     Layout.fillWidth: true
                     visible: feedbackManualVisible
                     enabled: selectedMealId > 0
@@ -1518,30 +1407,27 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: feedbackStatus
-                    color: "#6b5846"
+                    color: theme.secondaryText
                     wrapMode: Text.Wrap
                 }
             }
         }
 
-        AutoHeightRectangle {
+        SectionCard {
             Layout.fillWidth: true
-            radius: 16
-            color: "#fff9f0"
-            border.color: "#ead8bf"
-            border.width: 1
+            fill: theme.surface
+            stroke: theme.border
+            padding: 16
 
             ColumnLayout {
-                x: 16
-                y: 16
-                width: parent.width - 32
+                width: parent.width
                 height: implicitHeight
                 spacing: 8
 
                 Label {
                     Layout.fillWidth: true
                     text: "最近餐次"
-                    color: "#3d2d22"
+                    color: theme.text
                     font.bold: true
                     wrapMode: Text.Wrap
                 }
@@ -1556,16 +1442,16 @@ ApplicationWindow {
                         onClicked: loadFeedbackFromMeal(modelData)
 
                         background: Rectangle {
-                            radius: 10
-                            color: modelData.id === selectedMealId ? "#f2dcc1" : "#fffaf2"
-                            border.color: modelData.id === selectedMealId ? "#c98b3d" : "#dec4a3"
+                            radius: theme.radiusControl
+                            color: modelData.id === selectedMealId ? theme.greenPanel : theme.warmPanel
+                            border.color: modelData.id === selectedMealId ? theme.borderStrong : theme.border
                             border.width: 1
                         }
 
                         contentItem: Label {
-                            text: modelData.eatenAt + " | "
+                            text: compactMealTime(modelData.eatenAt) + " | "
                                   + (modelData.dishSummary.length > 0 ? modelData.dishSummary : modelData.mealTypeLabel)
-                            color: "#5c4937"
+                            color: theme.bodyText
                             wrapMode: Text.Wrap
                             maximumLineCount: 2
                             elide: Text.ElideRight
@@ -1590,8 +1476,8 @@ ApplicationWindow {
         onOpened: syncLlmFields()
 
         background: Rectangle {
-            color: "#fff9f0"
-            border.color: "#dec4a3"
+            color: theme.page
+            border.color: theme.border
             border.width: 1
         }
 
@@ -1607,8 +1493,8 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: "管理"
-                    color: "#3d2d22"
-                    font.pixelSize: 22
+                    color: theme.text
+                    font.pixelSize: theme.sectionTitleSize
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -1635,7 +1521,7 @@ ApplicationWindow {
                         { key: "meals", label: "反馈与记录" }
                     ]
 
-                    DrawerSectionButton {
+                        StyledButton {
                         text: modelData.label
                         selected: drawerSection === modelData.key
                         onClicked: drawerSection = modelData.key
@@ -1664,25 +1550,22 @@ ApplicationWindow {
                         height: implicitHeight
                         spacing: 12
 
-                        AutoHeightRectangle {
+                        SectionCard {
                             Layout.fillWidth: true
-                            radius: 16
-                            color: "#fff5e8"
-                            border.color: "#dec4a3"
-                            border.width: 1
+                            fill: theme.warmPanel
+                            stroke: theme.border
+                            padding: 14
 
                             ColumnLayout {
-                                x: 14
-                                y: 14
-                                width: parent.width - 28
+                                width: parent.width
                                 height: implicitHeight
                                 spacing: 10
 
                                 Label {
                                     Layout.fillWidth: true
                                     text: "LLM 调试"
-                                    color: "#3d2d22"
-                                    font.pixelSize: 20
+                                    color: theme.text
+                                    font.pixelSize: theme.sectionTitleSize
                                     font.bold: true
                                     wrapMode: Text.Wrap
                                 }
@@ -1690,27 +1573,24 @@ ApplicationWindow {
                                 Label {
                                     Layout.fillWidth: true
                                     text: appConfig.llmConfigSummary
-                                    color: "#6b5846"
+                                    color: theme.secondaryText
                                     wrapMode: Text.Wrap
                                 }
                             }
                         }
 
-                        AutoHeightRectangle {
+                        SectionCard {
                             Layout.fillWidth: true
-                            radius: 16
-                            color: "#fffaf2"
-                            border.color: "#dec4a3"
-                            border.width: 1
+                            fill: theme.surface
+                            stroke: theme.border
+                            padding: 14
 
                             ColumnLayout {
-                                x: 14
-                                y: 14
-                                width: parent.width - 28
+                                width: parent.width
                                 height: implicitHeight
                                 spacing: 10
 
-                                StyledTextField {
+                StyledTextField {
                                     id: apiKeyField
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 46
@@ -1719,7 +1599,7 @@ ApplicationWindow {
                                     verticalAlignment: TextInput.AlignVCenter
                                 }
 
-                                StyledTextField {
+                StyledTextField {
                                     id: apiUrlField
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 46
@@ -1729,7 +1609,7 @@ ApplicationWindow {
                                     verticalAlignment: TextInput.AlignVCenter
                                 }
 
-                                StyledTextField {
+                StyledTextField {
                                     id: modelField
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 46
@@ -1746,7 +1626,7 @@ ApplicationWindow {
                                     columnSpacing: 8
                                     rowSpacing: 8
 
-                                    ReadableButton {
+                    StyledButton {
                                         Layout.fillWidth: true
                                         text: "保存"
                                         onClicked: {
@@ -1757,7 +1637,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    ReadableButton {
+                    StyledButton {
                                         Layout.fillWidth: true
                                         text: recommendationEngine.llmConnectionTestBusy ? "测试中..." : "测试连接"
                                         enabled: !recommendationEngine.llmConnectionTestBusy
@@ -1766,7 +1646,7 @@ ApplicationWindow {
                                                                                           modelField.text)
                                     }
 
-                                    ReadableButton {
+                    StyledButton {
                                         Layout.fillWidth: true
                                         text: "清空本地配置"
                                         onClicked: {
@@ -1776,7 +1656,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    ReadableButton {
+                    StyledButton {
                                         Layout.fillWidth: true
                                         text: "刷新推荐"
                                         enabled: !recommendationEngine.busy
@@ -1789,10 +1669,10 @@ ApplicationWindow {
                                     visible: recommendationEngine.llmConnectionTestState !== "idle"
                                     text: recommendationEngine.llmConnectionTestStatus
                                     color: recommendationEngine.llmConnectionTestState === "success"
-                                           ? "#3f6b3b"
+                                           ? theme.primary
                                            : recommendationEngine.llmConnectionTestState === "testing"
-                                             ? "#6b5846"
-                                             : "#8a4f2b"
+                                             ? theme.secondaryText
+                                             : theme.danger
                                     wrapMode: Text.Wrap
                                 }
                             }

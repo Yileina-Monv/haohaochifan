@@ -98,6 +98,12 @@ qt_add_qml_module(MealAdvisor
         app/qml/Main.qml
         app/qml/MealLogPage.qml
         app/qml/SchedulePage.qml
+        app/qml/SectionCard.qml
+        app/qml/StyledButton.qml
+        app/qml/StyledComboBox.qml
+        app/qml/StyledTextArea.qml
+        app/qml/StyledTextField.qml
+        app/qml/Theme.qml
 )
 
 target_link_libraries(MealAdvisor

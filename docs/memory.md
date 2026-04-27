@@ -141,6 +141,37 @@ If the current task changes project direction or major behavior, also update
   header planning/budget line, fixes the bottom composer placeholder padding /
   send-button clipping risk, and moves the main shell / Drawer shared controls
   to a beige plus brown-yellow palette.
+- The first `codex-design` Round 1 frontend optimization has now added shared
+  QML design primitives:
+  `Theme.qml`, `SectionCard.qml`, `StyledButton.qml`,
+  `StyledTextField.qml`, `StyledTextArea.qml`, and `StyledComboBox.qml`.
+  `CMakeLists.txt` registers these files in the `MealAdvisor` QML module.
+  Main/Food/Schedule/Meals now use the shared button, text input, text area,
+  and combo box styling instead of page-local copied buttons or mostly default
+  Qt form controls. The main composer uses the shared section shell and the
+  `推荐 / 反馈 / 菜品 / 日常` mode buttons are visually closer to one coherent
+  segmented control.
+- The focused `codex-design` Round 2 frontend pass has now extended that shared
+  system across the main management surfaces:
+  - `Main.qml` header, task preview, current recommendation cards, Drawer
+    background, Drawer `LLM 调试`, and Drawer `饭后反馈` now use `Theme.qml`
+    tokens and `SectionCard` instead of page-local beige/brown literals.
+  - Food / Schedule / Meals styled inputs now use the shared `hintText` API
+    instead of overriding `placeholderText`, so Android focused/non-empty hint
+    hiding is governed from `StyledTextField` and `StyledTextArea`.
+  - The pass stayed QML-only and did not change recommendation scoring,
+    persistence, parser contracts, or schema.
+- A targeted Android screenshot feedback fix has now improved the Drawer
+  `反馈与记录` / Meals `餐次信息` form:
+  - the card uses tighter margins, `Theme.qml` tokens, clearer labels, and less
+    raw field stacking inside the Drawer
+  - the old single ISO timestamp text field has been replaced by a phone-friendlier
+    date field plus hour/minute dropdowns
+  - quick time buttons (`现在` / `午餐` / `晚餐`) fill common meal times without
+    forcing manual ISO timestamp entry
+  - saving still composes the original ISO-like timestamp string for the
+    existing `MealLogManager::saveMealLog(...)` path, so no C++ or schema change
+    was needed
 - All QML text inputs now hide their placeholder while focused or populated
   instead of letting the Android/Material style float the hint above the field.
   `Main.qml` styled inputs use a separate `hintText` property; Food, Schedule,
@@ -488,6 +519,93 @@ Completion signal:
 ## Recent Changes
 
 ### `2026-04-27`
+
+- Implemented Round 1 of `docs/android-frontend-design-optimization-plan.md`
+  as a QML-only frontend optimization:
+  - added shared design tokens in `app/qml/Theme.qml`
+  - added reusable `SectionCard`, `StyledButton`, `StyledTextField`,
+    `StyledTextArea`, and `StyledComboBox` QML components
+  - registered the new QML files in `CMakeLists.txt`
+  - removed copied `ReadableButton` definitions from Food / Schedule / Meals
+    and switched page buttons plus common text fields, text areas, and combo
+    boxes to the shared controls
+  - switched Main's shared task controls to the new reusable controls and made
+    the bottom composer shell use `SectionCard`
+  - preserved the local-first recommendation / feedback / dish-import behavior
+    and did not change C++ business logic
+- Verification for the Round 1 frontend pass:
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation`
+  - `MealAdvisorValidation.exe` passed `51/51`
+  - 5-second desktop smoke launch produced empty stderr
+  - desktop narrow screenshots were captured to `build/visual-checks/` at
+    `340px`, `420px`, and `700px` widths for the main recommendation surface
+  - Android arm64 debug APK rebuilt successfully and was copied to
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - source and desktop APK SHA256 both match
+    `22560067C941EE40F0385FE99CC0DE759A4EEAF83720C6E7C25676DE0223AD4A`
+  - APK size is `71794714` bytes, timestamp `2026-04-27 15:45:01`
+  - `aapt dump badging` still reports package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, launcher icons, launchable Qt activity, and
+    native-code `arm64-v8a`
+  - `adb devices -l` and `emulator -list-avds` are still empty, so Android
+    install / launch / touch validation remains blocked
+- Implemented Round 2 of `docs/android-frontend-design-optimization-plan.md`
+  as a focused QML-only frontend pass:
+  - applied `SectionCard` / `Theme.qml` tokens more consistently to
+    `Main.qml` surfaces: app header, task preview, recommendation summary,
+    recommendation candidate cards, Drawer shell, Drawer `LLM 调试`, and Drawer
+    `饭后反馈`
+  - removed the remaining `Main.qml` hard-coded hex color literals from those
+    shared shell surfaces, leaving semantic colors in `Theme.qml`
+  - switched all Food / Schedule / Meals styled text inputs and text areas to
+    the shared `hintText` property instead of direct `placeholderText`
+    overrides
+  - kept the pass QML-only; no C++ business logic, parser contract, schema, or
+    recommendation-scoring changes were made
+- Verification for the Round 2 frontend pass:
+  - `adb devices -l` returned no attached devices, and `emulator -list-avds`
+    returned no configured AVD names, so the Android runtime pass was still
+    blocked before install
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation`
+  - `MealAdvisorValidation.exe` passed `51/51`
+  - 5-second desktop smoke launch produced empty stderr
+  - Android arm64 debug APK rebuilt successfully and was copied to
+    `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - source and desktop APK SHA256 both match
+    `1127B2918E3F0C09E5139B194DFFCE2BBD5B3B3D2DE1195148ADEA1EAF4990F4`
+  - APK size is `71819378` bytes, timestamp `2026-04-27 17:18:41`
+  - `aapt dump badging` still reports package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, launcher icons, launchable Qt activity, and
+    native-code `arm64-v8a`
+- Implemented the targeted Meals `餐次信息` mobile form fix from Android
+  screenshots:
+  - added a shared `FieldLabel` helper in `MealLogPage.qml`
+  - changed the `餐次信息` card to labeled controls with tighter mobile margins
+    and shared `Theme.qml` colors
+  - replaced the hard-to-edit full timestamp field with date + hour + minute
+    controls and quick actions for `现在` / `午餐` / `晚餐`
+  - kept persistence compatibility by composing the original timestamp string
+    before calling `mealLogManager.saveMealLog(...)`
+- Verification for the targeted Meals form fix:
+  - desktop build passed:
+    `cmake --build build\desktop-debug --target MealAdvisor MealAdvisorValidation`
+  - `MealAdvisorValidation.exe` passed `51/51`
+  - 5-second desktop smoke launch produced empty stderr
+  - Android arm64 debug APK rebuilt successfully and replaced the single desktop
+    APK at `C:\Users\Administrator\Desktop\MealAdvisor-arm64-debug.apk`
+  - desktop APK SHA256 is
+    `7A2AF1CADD692360E2464FC966DD40B5B97FF5E2F7B54B403F68A9A6A9150B65`
+  - APK size is `71845058` bytes, timestamp `2026-04-27 17:44:25`
+  - `aapt dump badging` still reports package
+    `org.qtproject.example.MealAdvisor`, `minSdkVersion 28`,
+    `targetSdkVersion 36`, launcher icons, launchable Qt activity, and
+    native-code `arm64-v8a`
+  - `adb devices -l` still returned no attached devices in this shell, so the
+    screenshot-origin Android runtime fix still needs device confirmation
 
 - Implemented the initial V3 recommendation budget model:
   - `RecommendationEngine::SupplementAdjustment` now includes `budgetMode`
@@ -1684,12 +1802,19 @@ Priority note:
 
 Immediate next work:
 
-- Run an Android runtime pass for the refreshed main shell if a device or AVD
-  becomes available. Validate the new `推荐 / 反馈 / 菜品 / 日常` composer modes,
+- Run an Android runtime pass for the Round 1 + Round 2 shared-control
+  frontend work as soon as a device or AVD becomes available. Validate the new
+  shared button/input/combo visuals, `推荐 / 反馈 / 菜品 / 日常` composer modes,
   preview card, feedback confirmation path, dish import confirmation path,
-  Drawer fallback controls, keyboard behavior, narrow-screen scrolling, and
-  confirm the Home recommendation result area no longer creates a horizontal
-  scrollbar or can be dragged left/right.
+  Drawer section controls, Drawer `LLM 调试`, Drawer `饭后反馈`, embedded
+  Schedule / Food / Meals scrolling, keyboard behavior, narrow-screen
+  scrolling, and confirm the Home recommendation result area no longer creates
+  horizontal movement.
+- If Android remains unavailable, the next frontend-only pass should be small
+  and screenshot-led: inspect Drawer Schedule / Food / Meals at narrow desktop
+  widths and reduce only the most obvious remaining local color/radius literals
+  in those embedded management pages. Avoid another broad redesign before real
+  Android touch evidence.
 - After runtime validation, the next feature slice should be either:
   temporary routine persistence (`temporary_events` table/manager/parser and
   recommendation-context merge), or a small C++ natural-language task service
@@ -1824,6 +1949,21 @@ Use this sequence in the next window if continuing recommendation work:
   validation for mode switching, preview visibility, confirmation actions,
   soft-keyboard behavior, and the dish merchant selector. `日常` is deliberately
   no-op preview scaffolding until temporary routine persistence is added.
+- The shared-control frontend pass has desktop build, validation, smoke,
+  narrow main-page screenshot, APK, and APK metadata coverage. It still needs
+  real Android runtime confirmation for native style differences in
+  `StyledComboBox` popups, soft-keyboard behavior in `StyledTextField` /
+  `StyledTextArea`, Drawer section switching, and scrolling inside embedded
+  management pages.
+- The Round 2 shared-surface frontend pass has desktop build, validation,
+  smoke, APK, and APK metadata coverage. It still needs real Android runtime
+  confirmation for Drawer `LLM 调试`, Drawer `饭后反馈`, embedded Schedule / Food /
+  Meals scrolling, and Android native behavior after all styled inputs were
+  routed through `hintText`.
+- The Meals `餐次信息` timestamp-entry fix was driven by Android screenshots and
+  has build / validation / smoke / APK metadata coverage, but this shell still
+  has no attached adb device, so the improved date + hour/minute controls need
+  direct touch confirmation on the user's device.
 - The current recommendation baseline now raises `牛肉火锅单人套餐` into top-3 for
   the relaxed no-class dinner validation scenario without relying on default
   budget scoring. Explicit strict-budget input still pushes over-line dinner
